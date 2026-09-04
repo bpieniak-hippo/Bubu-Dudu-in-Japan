@@ -128,6 +128,8 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Kioto",
+    lat: 34.9875,
+    lon: 135.7514,
     title: "Stay SAKURA Kyoto Matsuri",
     details: "Kioto · 5 nocy",
     address: "115 Isematsucho, Shimogyo-ku, Kyoto 600-8254",
@@ -146,6 +148,8 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Tokio",
+    lat: 35.7176,
+    lon: 139.7976,
     title: "Stay SAKURA Tokyo Asakusa Yokozuna",
     details: "Tokio, 1. pobyt · 6 nocy",
     address: "3-30-5 Asakusa, Taito-ku, Tokyo 111-0032",
@@ -166,6 +170,8 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Okinawa",
+    lat: 26.4543,
+    lon: 127.8093,
     title: "AQUASENSE Hotel & Resort",
     details: "Okinawa · 5 nocy",
     address: "86-1 Fuchaku Kurosakibaru, Onna-son, Kunigami-gun, Okinawa 904-0413",
@@ -182,6 +188,8 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Tokio",
+    lat: 35.7219,
+    lon: 139.7907,
     title: "Stay SAKURA Tokyo Asakusa Edo no Mai",
     details: "Tokio, 2. pobyt · 2 noce",
     address: "1-6-3 Senzoku, Taito-ku, Tokyo",
@@ -262,6 +270,15 @@ const EVENTS = [
 // Opisy pokazywane po kliknięciu w kartę atrakcji.
 // desc — czym to jest, tips — praktyczne wskazówki.
 const ATTRACTION_DETAILS = {
+  "tokyo-sushi-biyori": {
+    desc: "Kameralne sushi w stylu edomae w Zachodnim Shinjuku — omakase z 18 pozycji podawane przez szefa przy ladzie, do tego karta z ponad 15 rodzajami sake. Ok. 300 m od stacji Shinjuku (Tabata Bldg. 5F, 1-12-9 Nishishinjuku).",
+    tips: [
+      "⚠️ Tylko na rezerwację — dwie tury wieczorem: 17:30 i 20:00",
+      "Rezerwacja przez TableCheck, najlepiej z wyprzedzeniem",
+      "Omakase ok. 12 500 ¥ od osoby (widełki 10–15 tys. ¥)",
+      "Menu układa szef — nie ma wyboru, jest sezon",
+    ],
+  },
   "kioto-ramen-rennosuke": {
     desc: "Niewielka ramenowa wyróżniona w przewodniku Michelin w kategorii dobrych i niedrogich adresów.",
     tips: [
@@ -455,6 +472,8 @@ const ATTRACTIONS = [
         items: [
           {
             id: "kioto-ramen-rennosuke",
+            lat: 35.0337,
+            lon: 135.7392,
             name: "Ramen w Noodle Shop Rennosuke",
             link: "https://guide.michelin.com/pl/en/kyoto-region/kyoto/restaurant/noodle-shop-rennosuke",
             mapQuery: "Noodle Shop Rennosuke, Kyoto",
@@ -463,6 +482,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-yakiniku-gyurakutei",
+            lat: 35.0038,
+            lon: 135.7568,
             name: "Kyoto Yakiniku Gyurakutei (wagyu)",
             link: "https://www.tablecheck.com/en/gyurakutei",
             mapQuery: "Gyurakutei Yakiniku, Kyoto",
@@ -471,6 +492,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-nishiki-market",
+            lat: 35.005,
+            lon: 135.7656,
             name: "Nishiki Market",
             mapQuery: "Nishiki Market, Kyoto",
             photo: "assets/attractions/kioto-nishiki-market.jpg",
@@ -483,6 +506,8 @@ const ATTRACTIONS = [
         items: [
           {
             id: "kioto-nara-deer",
+            lat: 34.6829,
+            lon: 135.8546,
             name: "Nara — jelenie",
             mapQuery: "Nara Park, Nara",
             photo: "assets/attractions/kioto-nara-deer.jpg",
@@ -490,6 +515,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-gion",
+            lat: 35.0047,
+            lon: 135.7784,
             name: "Dzielnica Gion",
             mapQuery: "Gion, Kyoto",
             photo: "assets/attractions/kioto-gion.jpg",
@@ -497,6 +524,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-kiyomizu-dera",
+            lat: 34.9943,
+            lon: 135.7844,
             name: "Kiyomizu-dera, Ninenzaka i Sannenzaka",
             mapQuery: "Kiyomizu-dera, Kyoto",
             photo: "assets/attractions/kioto-kiyomizu-dera.jpg",
@@ -504,6 +533,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-fushimi-inari",
+            lat: 34.9675,
+            lon: 135.7797,
             name: "Fushimi Inari Taisha",
             mapQuery: "Fushimi Inari Taisha, Kyoto",
             photo: "assets/attractions/kioto-fushimi-inari.jpg",
@@ -511,6 +542,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-samurai-museum",
+            lat: 35.0103,
+            lon: 135.7687,
             name: "Muzeum Samurajów i Ninja",
             link: "https://mai-ko.com/tour/samurai-experience-kyoto-samurai-museum-tour-and-armor-trial/",
             mapQuery: "Samurai and Ninja Museum Kyoto",
@@ -519,6 +552,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-tea-ceremony",
+            lat: 35.0015,
+            lon: 135.7575,
             name: "Ceremonia picia herbaty",
             link: "https://mai-ko.com/tour/samurai-experience-and-tea-ceremony-experience/",
             mapQuery: "Maikoya Kyoto Tea Ceremony",
@@ -527,6 +562,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-arashiyama",
+            lat: 35.0167,
+            lon: 135.6711,
             name: "Las bambusowy Arashiyama (Sagano Bamboo Forest)",
             date: "15 września",
             note: "być na 8:00, bez rezerwacji",
@@ -536,6 +573,8 @@ const ATTRACTIONS = [
           },
           {
             id: "kioto-amanohashidate",
+            lat: 35.568,
+            lon: 135.1906,
             name: "Amanohashidate, Ine Funaya i zatoka Ine",
             note: "wycieczka 10h (GetYourGuide), bez rezerwacji",
             mapQuery: "Amanohashidate, Kyoto Prefecture",
@@ -549,6 +588,8 @@ const ATTRACTIONS = [
         items: [
           {
             id: "kioto-kifune-kurama",
+            lat: 35.1179,
+            lon: 135.7707,
             name: "Kifune/Kurama — trekking górski + świątynia",
             mapQuery: "Kurama-dera, Kyoto",
             photo: "assets/attractions/kioto-kifune-kurama.jpg",
@@ -563,10 +604,28 @@ const ATTRACTIONS = [
     dates: "19–25 września i 30 września – 2 października",
     groups: [
       {
+        category: "Jedzenie",
+        items: [
+          {
+            id: "tokyo-sushi-biyori",
+            lat: 35.6904,
+            lon: 139.6979,
+            name: "Sushi Biyori (omakase, Shinjuku)",
+            note: "⚠️ tylko na rezerwację — dwie tury: 17:30 i 20:00",
+            link: "https://www.tablecheck.com/en/sushibiyori",
+            mapQuery: "Sushi Biyori, Nishi-Shinjuku, Tokyo",
+            photo: "assets/attractions/tokyo-sushi-biyori.jpg",
+            author: "paula",
+          },
+        ],
+      },
+      {
         category: "Atrakcje",
         items: [
           {
             id: "tokyo1-kamakura",
+            lat: 35.3193,
+            lon: 139.547,
             name: "Kamakura — całodniowa wycieczka",
             mapQuery: "Kamakura, Kanagawa",
             photo: "assets/attractions/tokyo1-kamakura.jpg",
@@ -574,6 +633,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo1-enoshima",
+            lat: 35.3001,
+            lon: 139.4806,
             name: "Enoshima — Dzwon Miłości (Ryuren no Kane)",
             note: "połączyć z Kamakurą, ta sama linia Enoden",
             mapQuery: "Enoshima, Kanagawa",
@@ -582,6 +643,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo1-ghibli",
+            lat: 35.6962,
+            lon: 139.5706,
             name: "Muzeum Ghibli",
             date: "21 września, 12:00",
             note: "✅ kupione",
@@ -591,6 +654,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo2-tower-records",
+            lat: 35.6619,
+            lon: 139.7011,
             name: "Tower Records Shibuya",
             date: "1 października",
             mapQuery: "Tower Records Shibuya, Tokyo",
@@ -604,6 +669,8 @@ const ATTRACTIONS = [
         items: [
           {
             id: "tokyo2-dragon-ball-store",
+            lat: 35.6823,
+            lon: 139.7685,
             name: "Dragon Ball Store — Tokyo Station, Character Street",
             mapQuery: "Tokyo Character Street, Tokyo Station",
             photo: "assets/attractions/tokyo2-dragon-ball-store.jpg",
@@ -616,6 +683,8 @@ const ATTRACTIONS = [
         items: [
           {
             id: "tokyo-opt-minakami",
+            lat: 36.6786,
+            lon: 138.9992,
             name: "Minakami — onsen",
             mapQuery: "Minakami, Gunma",
             photo: "assets/attractions/tokyo-opt-minakami.jpg",
@@ -623,6 +692,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo-opt-fuji-kawaguchiko",
+            lat: 35.5131,
+            lon: 138.7448,
             name: "Góra Fuji / Kawaguchiko",
             mapQuery: "Lake Kawaguchi, Yamanashi",
             photo: "assets/attractions/tokyo-opt-fuji-kawaguchiko.jpg",
@@ -630,6 +701,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo-opt-kawagoe",
+            lat: 35.9251,
+            lon: 139.4857,
             name: "Kawagoe — „Małe Edo”",
             mapQuery: "Kawagoe, Saitama",
             photo: "assets/attractions/tokyo-opt-kawagoe.jpg",
@@ -637,6 +710,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo-opt-sumo-aki-basho",
+            lat: 35.6969,
+            lon: 139.7935,
             name: "Sumo — Aki Basho",
             date: "13–27 września, Ryogoku Kokugikan",
             note: "⚠️ bilety jeszcze nie kupione",
@@ -646,6 +721,8 @@ const ATTRACTIONS = [
           },
           {
             id: "tokyo-opt-sumo-training",
+            lat: 35.6868,
+            lon: 139.7884,
             name: "Trening sumo (Arashio Stable)",
             note: "za darmo, 6:00–9:00 w dni robocze",
             mapQuery: "Arashio Stable, Tokyo",

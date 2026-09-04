@@ -57,6 +57,7 @@ const STORE_KEYS = {
   comments: "bubuDudu.attractionComments",
   session: "bubuDudu.session",
   custom: "bubuDudu.customAttractions",
+  weather: "bubuDudu.weather",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -237,6 +238,251 @@ function mapsUrl(query) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+// ---------- Pogoda (Open-Meteo — darmowe API, bez klucza) ----------
+// Prognoza sięga tylko ~16 dni do przodu, a wyjazd trwa 19 dni. Dalsze dni
+// dostają "typową pogodę": średnią z tych samych dat z trzech ostatnich lat.
+const WEATHER_TTL_MS = 6 * 60 * 60 * 1000;
+const WEATHER_YEARS_BACK = 3;
+
+// Kod pogody WMO -> ikona i opis
+function weatherLook(code) {
+  if (code === 0) return { icon: "☀️", label: "Bezchmurnie" };
+  if (code === 1) return { icon: "🌤️", label: "Przeważnie słonecznie" };
+  if (code === 2) return { icon: "⛅", label: "Częściowe zachmurzenie" };
+  if (code === 3) return { icon: "☁️", label: "Pochmurno" };
+  if (code <= 48) return { icon: "🌫️", label: "Mgła" };
+  if (code <= 57) return { icon: "🌦️", label: "Mżawka" };
+  if (code <= 65) return { icon: "🌧️", label: "Deszcz" };
+  if (code <= 67) return { icon: "🌧️", label: "Marznący deszcz" };
+  if (code <= 77) return { icon: "❄️", label: "Śnieg" };
+  if (code <= 82) return { icon: "🌦️", label: "Przelotny deszcz" };
+  if (code <= 86) return { icon: "🌨️", label: "Przelotny śnieg" };
+  return { icon: "⛈️", label: "Burza" };
+}
+
+// Hotel danego dnia — to jego współrzędne wyznaczają pogodę.
+// W dniu przeprowadzki liczy się nowy hotel, bo z poprzedniego wymeldowujemy się rano.
+function dayHotel(dateKey) {
+  const hotels = EVENTS.filter((ev) => ev.type === "hotel" && ev.lat);
+  return (
+    hotels.find((ev) => ev.startDate === dateKey) ||
+    hotels.find((ev) => ev.startDate <= dateKey && dateKey <= ev.endDate) ||
+    null
+  );
+}
+
+async function fetchJson(url) {
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.error) throw new Error(json.reason);
+  return json;
+}
+
+// Prognoza na najbliższe 16 dni, dobowa i godzinowa. Bez start_date/end_date,
+// bo API odrzuca zakres wykraczający poza swoje okno — sami wybieramy, co pasuje.
+async function fetchForecast(spot) {
+  const res = await fetchJson(
+    `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
+      `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code` +
+      `&timezone=Asia%2FTokyo&forecast_days=16`
+  );
+
+  // Godziny grupowane po dacie — API zwraca jedną płaską listę na cały zakres.
+  const hoursByDay = {};
+  res.hourly.time.forEach((stamp, i) => {
+    if (res.hourly.temperature_2m[i] == null) return;
+    const [date, time] = stamp.split("T");
+    (hoursByDay[date] = hoursByDay[date] || []).push({
+      hour: time.slice(0, 5),
+      temp: Math.round(res.hourly.temperature_2m[i]),
+      rain: res.hourly.precipitation_probability[i],
+      wind: Math.round(res.hourly.wind_speed_10m[i]),
+      code: res.hourly.weather_code[i],
+    });
+  });
+
+  const daily = res.daily;
+  const out = {};
+  daily.time.forEach((key, i) => {
+    // Ostatni dzień okna bywa jeszcze bez danych — inaczej Math.round(null) dałoby 0°.
+    if (daily.temperature_2m_max[i] == null) return;
+    out[key] = {
+      code: daily.weather_code[i],
+      max: Math.round(daily.temperature_2m_max[i]),
+      min: Math.round(daily.temperature_2m_min[i]),
+      rain: daily.precipitation_probability_max[i],
+      hours: hoursByDay[key] || [],
+      kind: "forecast",
+    };
+  });
+  return out;
+}
+
+// Typowa pogoda dla tych dat — średnia z archiwum z poprzednich lat.
+async function fetchNormals(spot, days) {
+  const tripYear = Number(TRIP.startDate.slice(0, 4));
+  const from = days[0].slice(5);
+  const to = days[days.length - 1].slice(5);
+  const acc = {}; // "MM-DD" -> { max: [], min: [], codes: [] }
+
+  const years = Array.from({ length: WEATHER_YEARS_BACK }, (_, i) => tripYear - 1 - i);
+  await Promise.all(
+    years.map(async (year) => {
+      const daily = (
+        await fetchJson(
+          `https://archive-api.open-meteo.com/v1/archive?latitude=${spot.lat}&longitude=${spot.lon}` +
+            `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo` +
+            `&start_date=${year}-${from}&end_date=${year}-${to}`
+        )
+      ).daily;
+
+      daily.time.forEach((date, i) => {
+        const md = date.slice(5);
+        const bucket = (acc[md] = acc[md] || { max: [], min: [], codes: [] });
+        if (daily.temperature_2m_max[i] != null) bucket.max.push(daily.temperature_2m_max[i]);
+        if (daily.temperature_2m_min[i] != null) bucket.min.push(daily.temperature_2m_min[i]);
+        if (daily.weather_code[i] != null) bucket.codes.push(daily.weather_code[i]);
+      });
+    })
+  );
+
+  const avg = (nums) => Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+  const mostCommon = (nums) =>
+    nums.sort(
+      (a, b) => nums.filter((n) => n === b).length - nums.filter((n) => n === a).length
+    )[0];
+
+  const out = {};
+  days.forEach((key) => {
+    const bucket = acc[key.slice(5)];
+    if (!bucket || !bucket.max.length) return;
+    out[key] = {
+      code: mostCommon(bucket.codes),
+      max: avg(bucket.max),
+      min: avg(bucket.min),
+      kind: "normal",
+    };
+  });
+  return out;
+}
+
+async function fetchWeather() {
+  // Jedno zapytanie na hotel — pogoda dotyczy miejsca, w którym faktycznie śpimy.
+  const byHotel = new Map();
+  tripDayKeys().forEach((key) => {
+    const hotel = dayHotel(key);
+    if (!hotel) return;
+    if (!byHotel.has(hotel)) byHotel.set(hotel, []);
+    byHotel.get(hotel).push(key);
+  });
+
+  const results = {};
+  await Promise.all(
+    [...byHotel].map(async ([hotel, days]) => {
+      const forecast = await fetchForecast(hotel);
+      const missing = days.filter((key) => !forecast[key]);
+      const normals = missing.length ? await fetchNormals(hotel, missing) : {};
+      days.forEach((key) => {
+        const entry = forecast[key] || normals[key];
+        if (entry) results[key] = { ...entry, city: hotel.city, place: hotel.title };
+      });
+    })
+  );
+  return results;
+}
+
+function getWeather() {
+  return loadStore("weather");
+}
+
+// Odświeżamy co 6 h. Bez sieci (np. plik otwarty offline w Japonii)
+// zostaje ostatnio zapisana pogoda zamiast pustego miejsca.
+async function loadWeather() {
+  const cached = getWeather();
+  if (cached._ts && Date.now() - cached._ts < WEATHER_TTL_MS) return;
+
+  let fresh;
+  try {
+    fresh = await fetchWeather();
+  } catch {
+    return;
+  }
+
+  Object.entries(fresh).forEach(([key, value]) => setStoreValue("weather", key, value));
+  setStoreValue("weather", "_ts", Date.now());
+  renderTimeline();
+  renderCalendar();
+}
+
+function weatherBadgeHtml(dateKey) {
+  const w = getWeather()[dateKey];
+  if (!w) return "";
+  const look = weatherLook(w.code);
+  const isNormal = w.kind === "normal";
+  const title = isNormal
+    ? `${look.label} · typowa pogoda dla tej daty (średnia z ${WEATHER_YEARS_BACK} ostatnich lat)`
+    : `${look.label} · prognoza${w.rain != null ? ` · szansa opadów ${w.rain}%` : ""}`;
+
+  return `
+    <button type="button" class="day-weather${isNormal ? " is-normal" : ""}" data-weather="${dateKey}" title="${escapeHtml(title)}">
+      <span class="wx-icon">${look.icon}</span>
+      <span class="wx-temp">${isNormal ? "~" : ""}${w.max}°<span class="wx-min">/${w.min}°</span></span>
+      ${!isNormal && w.rain != null ? `<span class="wx-rain">💧 ${w.rain}%</span>` : ""}
+    </button>
+  `;
+}
+
+// Rozkład godzinowy dnia: temperatura, szansa opadów, wiatr.
+function openWeatherDetail(dateKey) {
+  const w = getWeather()[dateKey];
+  if (!w) return;
+
+  const look = weatherLook(w.code);
+  const { dow } = dayLabel(dateKey);
+  const hours = w.hours || [];
+  const body = hours.length
+    ? `<div class="wx-table">
+         <div class="wx-row wx-header">
+           <span>Godz.</span><span></span><span>Temp.</span><span>💧 Opady</span><span>🍃 Wiatr</span>
+         </div>
+         ${hours
+           .map(
+             (h) => `
+           <div class="wx-row">
+             <span class="wx-h">${h.hour}</span>
+             <span>${weatherLook(h.code).icon}</span>
+             <span class="wx-h-temp">${h.temp}°</span>
+             <span class="wx-h-rain${h.rain >= 40 ? " is-wet" : ""}">${h.rain != null ? `${h.rain}%` : "–"}</span>
+             <span class="wx-h-wind">${h.wind} km/h</span>
+           </div>`
+           )
+           .join("")}
+       </div>`
+    : `<p class="wx-note">
+         Rozkład godzinowy pojawi się, gdy ten dzień wejdzie w zasięg prognozy
+         (Open-Meteo podaje ją na 16 dni do przodu). Na razie widać średnią
+         z ${WEATHER_YEARS_BACK} ostatnich lat dla tej daty.
+       </p>`;
+
+  openModal(`
+    <div class="wx-detail">
+      <header class="wx-detail-head">
+        <span class="wx-detail-icon">${look.icon}</span>
+        <div>
+          <p class="wx-detail-title">${dow}, ${formatDayDate(dateKey)}</p>
+          <p class="wx-detail-sub">${escapeHtml(w.place || w.city || "")}</p>
+        </div>
+      </header>
+      <p class="wx-detail-summary">
+        ${look.label} · ${w.kind === "normal" ? "~" : ""}${w.max}° / ${w.min}°
+        ${w.rain != null ? ` · szansa opadów do ${w.rain}%` : ""}
+      </p>
+      ${body}
+    </div>
+  `);
+}
+
 // ---------- Widok "Dzień po dniu" ----------
 
 // Wszystkie dni wyjazdu jako klucze "YYYY-MM-DD"
@@ -353,6 +599,7 @@ function dayCardHtml(dateKey, dayEvents) {
         <p class="day-dow">${dow}</p>
         <p class="day-sub">${daySubtitle(dateKey)}</p>
       </div>
+      ${weatherBadgeHtml(dateKey)}
     </header>
     ${
       context.length
@@ -387,12 +634,14 @@ function renderTimeline() {
 
 // ---------- Widok "Podróż" ----------
 const LOGISTICS_SECTIONS = [
-  { type: "flight", title: "✈️ Loty" },
-  { type: "train", title: "🚄 Shinkansen" },
-  { type: "hotel", title: "🏨 Noclegi" },
-  { type: "car", title: "🚗 Wynajem auta" },
-  { type: "ticket", title: "🎟️ Wykupione bilety" },
+  { type: "flight", title: "✈️ Loty", chip: "✈️ Loty" },
+  { type: "train", title: "🚄 Shinkansen", chip: "🚄 Pociągi" },
+  { type: "hotel", title: "🏨 Noclegi", chip: "🏨 Noclegi" },
+  { type: "car", title: "🚗 Wynajem auta", chip: "🚗 Auto" },
+  { type: "ticket", title: "🎟️ Wykupione bilety", chip: "🎟️ Bilety" },
 ];
+
+let logisticsFilter = "all";
 
 function logisticsCardHtml(ev) {
   const range = ev.date
@@ -412,52 +661,95 @@ function logisticsCardHtml(ev) {
     ["Nr rezerwacji", ev.ref],
   ].filter(([, v]) => v);
 
+  // Ze zdjęciem tytuł leży na zdjęciu, bez zdjęcia zostaje zwykły nagłówek z ikoną.
+  const head = ev.photo
+    ? `<div class="trip-photo">
+         <img src="${ev.photo}" alt="" loading="lazy" />
+         <div class="trip-photo-text">
+           <span class="trip-badge">${ev.icon} ${range}</span>
+           <p class="trip-title">${ev.title}</p>
+         </div>
+       </div>`
+    : `<header class="trip-head">
+         <span class="trip-icon">${ev.icon}</span>
+         <div>
+           <p class="trip-title">${ev.title}</p>
+           <p class="trip-range">${range}</p>
+         </div>
+       </header>`;
+
   return `
     <article class="trip-card">
-      ${ev.photo ? `<div class="trip-photo"><img src="${ev.photo}" alt="" loading="lazy" /></div>` : ""}
-      <header class="trip-head">
-        <span class="trip-icon">${ev.icon}</span>
-        <div>
-          <p class="trip-title">${ev.title}</p>
-          <p class="trip-range">${range}</p>
+      ${head}
+      <div class="trip-body">
+        ${
+          rows.length
+            ? `<dl class="trip-rows">${rows
+                .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+                .join("")}</dl>`
+            : ""
+        }
+        ${
+          ev.extra && ev.extra.length
+            ? `<ul class="trip-extra">${ev.extra.map((e) => `<li>${e}</li>`).join("")}</ul>`
+            : ""
+        }
+        <div class="trip-links">
+          ${ev.fromMap ? `<a href="${mapsUrl(ev.fromMap)}" target="_blank" rel="noopener">📍 skąd</a>` : ""}
+          ${ev.toMap ? `<a href="${mapsUrl(ev.toMap)}" target="_blank" rel="noopener">📍 dokąd</a>` : ""}
+          ${!ev.fromMap && ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
+          ${ev.booking ? `<a href="${ev.booking}" target="_blank" rel="noopener">🛏️ rezerwacja</a>` : ""}
+          ${ev.site ? `<a href="${ev.site}" target="_blank" rel="noopener">🌐 strona</a>` : ""}
+          ${ev.link ? `<a href="${ev.link}" target="_blank" rel="noopener">🔗 link</a>` : ""}
         </div>
-      </header>
-      ${
-        rows.length
-          ? `<dl class="trip-rows">${rows
-              .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
-              .join("")}</dl>`
-          : ""
-      }
-      ${
-        ev.extra && ev.extra.length
-          ? `<ul class="trip-extra">${ev.extra.map((e) => `<li>${e}</li>`).join("")}</ul>`
-          : ""
-      }
-      <div class="trip-links">
-        ${ev.fromMap ? `<a href="${mapsUrl(ev.fromMap)}" target="_blank" rel="noopener">📍 skąd</a>` : ""}
-        ${ev.toMap ? `<a href="${mapsUrl(ev.toMap)}" target="_blank" rel="noopener">📍 dokąd</a>` : ""}
-        ${!ev.fromMap && ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
-        ${ev.booking ? `<a href="${ev.booking}" target="_blank" rel="noopener">🛏️ rezerwacja</a>` : ""}
-        ${ev.site ? `<a href="${ev.site}" target="_blank" rel="noopener">🌐 strona</a>` : ""}
-        ${ev.link ? `<a href="${ev.link}" target="_blank" rel="noopener">🔗 link</a>` : ""}
       </div>
     </article>
   `;
 }
 
+function renderLogisticsChips() {
+  const container = document.getElementById("logisticsChips");
+  // Przewinięcie paska ginie przy podmianie innerHTML — kliknięty chip uciekłby poza ekran.
+  const scroll = container.scrollLeft;
+  container.innerHTML =
+    `<button class="chip${logisticsFilter === "all" ? " active" : ""}" data-type="all">Wszystko</button>` +
+    LOGISTICS_SECTIONS.map(
+      (s) =>
+        `<button class="chip${logisticsFilter === s.type ? " active" : ""}" data-type="${s.type}">${s.chip}</button>`
+    ).join("");
+  container.scrollLeft = scroll;
+
+  if (container.dataset.bound) return;
+  container.dataset.bound = "1";
+  container.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    logisticsFilter = chip.dataset.type;
+    renderLogisticsChips();
+    renderLogistics();
+    document.getElementById("view-logistics").scrollIntoView({ block: "start" });
+  });
+}
+
 function renderLogistics() {
   const container = document.getElementById("logisticsList");
-  container.innerHTML = LOGISTICS_SECTIONS.map((section) => {
-    const items = EVENTS.filter((ev) => ev.type === section.type);
-    if (!items.length) return "";
-    return `
-      <section class="trip-section">
-        <h2 class="trip-section-title">${section.title}</h2>
-        ${items.map(logisticsCardHtml).join("")}
-      </section>
-    `;
-  }).join("");
+  const sections =
+    logisticsFilter === "all"
+      ? LOGISTICS_SECTIONS
+      : LOGISTICS_SECTIONS.filter((s) => s.type === logisticsFilter);
+
+  container.innerHTML = sections
+    .map((section) => {
+      const items = EVENTS.filter((ev) => ev.type === section.type);
+      if (!items.length) return "";
+      return `
+        <section class="trip-section">
+          <h2 class="trip-section-title">${section.title}<span class="trip-count">${items.length}</span></h2>
+          ${items.map(logisticsCardHtml).join("")}
+        </section>
+      `;
+    })
+    .join("");
 }
 
 function renderMonth(year, month, eventsByDay) {
@@ -494,7 +786,10 @@ function renderMonth(year, month, eventsByDay) {
     const dayEvents = eventsByDay[key] || [];
 
     const cell = document.createElement("div");
-    cell.className = "day-cell" + (dayEvents.length ? " has-events" : "");
+    cell.className =
+      "day-cell" +
+      (dayEvents.length ? " has-events" : "") +
+      (key === toLocalKey(new Date()) ? " today" : "");
     cell.dataset.date = key;
 
     const num = document.createElement("div");
@@ -502,13 +797,35 @@ function renderMonth(year, month, eventsByDay) {
     num.textContent = day;
     cell.appendChild(num);
 
-    if (dayEvents.length) {
+    const weather = getWeather()[key];
+    if (weather) {
+      const wx = document.createElement("div");
+      wx.className = "cell-weather";
+      wx.textContent = `${weatherLook(weather.code).icon} ${weather.max}°`;
+      cell.appendChild(wx);
+    }
+
+    // Tylko przejazdy — reszta planu zagłuszałaby pogodę, a jest po kliknięciu w dzień.
+    // Auto pokazujemy w dniu odbioru i zwrotu, nie przez cały czas wynajmu.
+    const travelIcons = [
+      ...new Set(
+        dayEvents
+          .filter((ev) =>
+            ev.type === "car"
+              ? key === ev.startDate || key === ev.endDate
+              : ev.type === "flight" || ev.type === "train"
+          )
+          .map((ev) => ev.icon)
+      ),
+    ];
+    if (travelIcons.length) {
       const icons = document.createElement("div");
       icons.className = "day-icons";
-      const uniqueIcons = [...new Set(dayEvents.map((e) => e.icon))];
-      icons.textContent = uniqueIcons.join("");
+      icons.textContent = travelIcons.join("");
       cell.appendChild(icons);
+    }
 
+    if (dayEvents.length) {
       cell.addEventListener("click", () => showDayDetails(key, dayEvents, cell));
     }
 
@@ -847,9 +1164,10 @@ function renderAttractions() {
         const meta = [item.date, item.note].filter(Boolean).join(" · ");
         const savedDate = getUserDates()[item.id] || "";
 
+        // Zakres ograniczony do dni wyjazdu — poza nimi i tak nie ma nas w Japonii.
         const dateControl = item.date
           ? ""
-          : `<label class="date-picker">🗓️ <input type="date" data-id="${item.id}" value="${savedDate}" /></label>`;
+          : `<label class="date-picker">🗓️ <input type="date" data-id="${item.id}" value="${savedDate}" min="${TRIP.startDate}" max="${TRIP.endDate}" /></label>`;
 
         card.innerHTML = `
           ${
@@ -890,6 +1208,11 @@ function renderAttractions() {
         const input = card.querySelector("input[type=date]");
         if (input) {
           input.addEventListener("change", () => {
+            // Datę spoza wyjazdu da się jeszcze wpisać z klawiatury — cofamy ją.
+            if (!input.validity.valid) {
+              input.value = getUserDates()[item.id] || "";
+              return;
+            }
             setUserDate(item.id, input.value);
             renderCalendar();
             renderTimeline();
@@ -1038,13 +1361,21 @@ function init() {
 
   document.getElementById("addAttractionBtn").addEventListener("click", openAddForm);
 
+  // Plakietka pogody jest i na osi czasu, i w oknie dnia — jeden delegowany listener.
+  document.addEventListener("click", (e) => {
+    const badge = e.target.closest("[data-weather]");
+    if (badge) openWeatherDetail(badge.dataset.weather);
+  });
+
   renderLoginPanel();
   renderFilterChips();
+  renderLogisticsChips();
   renderLogistics();
   renderTimeline();
   renderCalendar();
   renderAttractions();
   renderProgress();
+  loadWeather();
 }
 
 document.addEventListener("DOMContentLoaded", init);

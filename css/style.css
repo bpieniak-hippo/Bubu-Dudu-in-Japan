@@ -308,9 +308,17 @@ body {
 
 .day-cell.selected { border-color: var(--blue-dark); background: #dcefff; }
 
+/* Dzisiejszy dzień — czerwona ramka, także po zaznaczeniu innego dnia */
+.day-cell.today,
+.day-cell.today.selected { border-color: #e03b3b; }
+
+.day-cell.today .day-num { color: #e03b3b; }
+
 .day-num { font-size: 0.8rem; font-weight: 700; }
 
 .day-icons { font-size: 0.85rem; line-height: 1; }
+
+.cell-weather { font-size: 0.62rem; color: #8a7a7a; line-height: 1; white-space: nowrap; }
 
 .event-card {
   display: flex;
@@ -717,6 +725,88 @@ body.modal-open { overflow: hidden; }
 .day-dow { font-weight: 800; font-size: 1rem; }
 .day-sub { font-size: 0.75rem; color: #9a8a8a; margin-top: 2px !important; }
 
+/* Pogoda w nagłówku dnia (Open-Meteo) — klik otwiera rozkład godzinowy */
+.day-weather {
+  flex: none;
+  margin-left: auto;
+  text-align: right;
+  line-height: 1.15;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  font: inherit;
+  cursor: pointer;
+}
+
+.day-weather:hover { background: #fff; }
+
+.wx-icon { font-size: 1.25rem; display: block; }
+.wx-temp { font-size: 0.85rem; font-weight: 700; color: #6b5a5a; }
+.wx-min { font-weight: 400; color: #b0a0a0; }
+.wx-rain { display: block; font-size: 0.68rem; color: var(--blue-dark); }
+
+/* Dni poza zasięgiem prognozy — średnia z poprzednich lat, więc mniej pewna */
+.day-weather.is-normal { opacity: 0.7; }
+.day-weather.is-normal .wx-temp { font-weight: 400; }
+
+/* ---------- Okno: pogoda godzina po godzinie ---------- */
+.wx-detail { padding: 18px 18px 22px; }
+
+.wx-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 44px;
+}
+
+.wx-detail-icon { font-size: 2.1rem; }
+.wx-detail-head p { margin: 0; }
+.wx-detail-title { font-weight: 800; font-size: 1.05rem; }
+.wx-detail-sub { font-size: 0.78rem; color: #9a8a8a; margin-top: 2px !important; }
+
+.wx-detail-summary {
+  margin: 12px 0 14px;
+  font-size: 0.85rem;
+  color: #6b5a5a;
+}
+
+.wx-table { font-size: 0.82rem; }
+
+.wx-row {
+  display: grid;
+  grid-template-columns: 46px 26px 1fr 1fr 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f4e8ee;
+}
+
+.wx-row:last-child { border-bottom: none; }
+
+.wx-header {
+  font-size: 0.7rem;
+  color: #9a8a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #f0e0e6;
+}
+
+.wx-h { color: #9a8a8a; }
+.wx-h-temp { font-weight: 700; }
+.wx-h-rain { color: #9a8a8a; }
+.wx-h-rain.is-wet { color: var(--blue-dark); font-weight: 700; }
+.wx-h-wind { color: #9a8a8a; }
+
+.wx-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fdf2f6;
+  font-size: 0.82rem;
+  color: #6b5a5a;
+}
+
 .day-context {
   display: flex;
   flex-direction: column;
@@ -764,25 +854,40 @@ body.modal-open { overflow: hidden; }
 .day-empty { margin: 0; color: #bbb; font-style: italic; }
 
 /* ---------- PODRÓŻ ---------- */
+#logisticsChips { margin-bottom: 16px; }
+
 .trip-section { margin-bottom: 24px; }
 
 .trip-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 10px;
   font-size: 1.05rem;
   color: var(--pink-dark);
+}
+
+/* Licznik pozycji w sekcji — od razu widać, ile jest lotów czy noclegów. */
+.trip-count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--pink);
+  color: #fff;
+  font-size: 0.75rem;
+  text-align: center;
 }
 
 .trip-card {
   background: #fff;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 14px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   overflow: hidden;
 }
 
 .trip-photo {
-  margin: -14px -14px 12px;
+  position: relative;
   aspect-ratio: 16 / 7;
   background: #f0e0e6;
 }
@@ -794,11 +899,40 @@ body.modal-open { overflow: hidden; }
   display: block;
 }
 
+/* Tytuł leży na zdjęciu — przyciemnienie u dołu, żeby biały tekst był czytelny. */
+.trip-photo-text {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 26px 14px 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0));
+  color: #fff;
+}
+
+.trip-badge {
+  display: inline-block;
+  margin-bottom: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4a3b3b;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.trip-photo-text .trip-title {
+  margin: 0;
+  color: #fff;
+  font-size: 1rem;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.trip-body { padding: 12px 14px 14px; }
+
 .trip-head {
   display: flex;
   gap: 10px;
   align-items: center;
-  margin-bottom: 10px;
+  padding: 14px 14px 0;
 }
 
 .trip-icon { font-size: 1.4rem; }
