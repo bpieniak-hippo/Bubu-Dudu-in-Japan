@@ -54,9 +54,9 @@ function buildEventsByDay(events) {
 const STORE_KEYS = {
   dates: "bubuDudu.attractionDates",
   visited: "bubuDudu.attractionVisited",
-  notes: "bubuDudu.attractionNotes",
   comments: "bubuDudu.attractionComments",
   session: "bubuDudu.session",
+  custom: "bubuDudu.customAttractions",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -98,14 +98,6 @@ function getVisited() {
 
 function setVisited(id, isVisited) {
   setStoreValue("visited", id, isVisited || "");
-}
-
-function getNotes() {
-  return loadStore("notes");
-}
-
-function setNote(id, text) {
-  setStoreValue("notes", id, text.trim());
 }
 
 // ---------- Zalogowany użytkownik ----------
@@ -171,10 +163,48 @@ function commentsHtml(attractionId) {
     .join("");
 }
 
-// Spłaszcza ATTRACTIONS do listy pojedynczych pozycji
+// ---------- Atrakcje dodane ręcznie ----------
+function getCustomAttractions() {
+  return loadStore("custom");
+}
+
+// ATTRACTIONS + atrakcje dodane ręcznie, dopięte do pasującego miasta i kategorii
+function getAttractionBlocks() {
+  const blocks = ATTRACTIONS.map((b) => ({
+    city: b.city,
+    dates: b.dates,
+    groups: b.groups.map((g) => ({ category: g.category, items: [...g.items] })),
+  }));
+
+  Object.values(getCustomAttractions()).forEach((item) => {
+    let block = blocks.find((b) => b.city === item.city);
+    if (!block) {
+      block = { city: item.city, dates: "dodane ręcznie", groups: [] };
+      blocks.push(block);
+    }
+    let group = block.groups.find((g) => g.category === item.category);
+    if (!group) {
+      group = { category: item.category, items: [] };
+      block.groups.push(group);
+    }
+    group.items.push(item);
+  });
+
+  return blocks;
+}
+
+// Miniaturka osoby, która dodała atrakcję — znak wodny na zdjęciu
+function authorWatermark(item) {
+  const author = USERS.find((u) => u.id === item.author);
+  if (!author) return "";
+  const label = `Dodane przez: ${author.name}`;
+  return `<img class="wm-avatar" src="${author.avatar}" alt="${label}" title="${label}" />`;
+}
+
+// Spłaszcza atrakcje do listy pojedynczych pozycji
 function flattenAttractions() {
   const flat = [];
-  ATTRACTIONS.forEach((cityBlock) => {
+  getAttractionBlocks().forEach((cityBlock) => {
     cityBlock.groups.forEach((group) => {
       group.items.forEach((item) => flat.push(item));
     });
@@ -186,7 +216,6 @@ function flattenAttractions() {
 function buildPlannedEvents() {
   const userDates = getUserDates();
   const visited = getVisited();
-  const notes = getNotes();
   const flat = flattenAttractions();
   const planned = [];
   flat.forEach((item) => {
@@ -196,10 +225,8 @@ function buildPlannedEvents() {
       date,
       type: "planned",
       icon: visited[item.id] ? "✅" : "📌",
-      title: item.name,
-      details: notes[item.id]
-        ? `📝 ${notes[item.id]}`
-        : "Zaplanowane samodzielnie w zakładce Atrakcje",
+      title: escapeHtml(item.name),
+      details: "Zaplanowane samodzielnie w zakładce Atrakcje",
       link: item.link,
     });
   });
@@ -285,9 +312,7 @@ function formatDayDate(dateKey) {
 }
 
 function eventCardHtml(ev) {
-  const notes = getNotes();
-  const note = ev.attractionId ? notes[ev.attractionId] : "";
-  const details = [ev.details, note ? `📝 ${note}` : ""].filter(Boolean).join(" · ");
+  const details = ev.details || "";
   const link = ev.link || ev.booking;
   return `
     <div class="event-card">
@@ -365,6 +390,8 @@ function logisticsCardHtml(ev) {
 
   const rows = [
     ["Adres", ev.address],
+    ["Skąd", ev.from],
+    ["Dokąd", ev.to],
     ["Zameldowanie", ev.checkIn],
     ["Wymeldowanie", ev.checkOut],
     ["Przewoźnik", ev.carrier],
@@ -376,6 +403,7 @@ function logisticsCardHtml(ev) {
 
   return `
     <article class="trip-card">
+      ${ev.photo ? `<div class="trip-photo"><img src="${ev.photo}" alt="" loading="lazy" /></div>` : ""}
       <header class="trip-head">
         <span class="trip-icon">${ev.icon}</span>
         <div>
@@ -396,7 +424,9 @@ function logisticsCardHtml(ev) {
           : ""
       }
       <div class="trip-links">
-        ${ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
+        ${ev.fromMap ? `<a href="${mapsUrl(ev.fromMap)}" target="_blank" rel="noopener">📍 skąd</a>` : ""}
+        ${ev.toMap ? `<a href="${mapsUrl(ev.toMap)}" target="_blank" rel="noopener">📍 dokąd</a>` : ""}
+        ${!ev.fromMap && ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
         ${ev.booking ? `<a href="${ev.booking}" target="_blank" rel="noopener">🛏️ rezerwacja</a>` : ""}
         ${ev.site ? `<a href="${ev.site}" target="_blank" rel="noopener">🌐 strona</a>` : ""}
         ${ev.link ? `<a href="${ev.link}" target="_blank" rel="noopener">🔗 link</a>` : ""}
@@ -518,7 +548,9 @@ function matchesFilters(item, city, category) {
   if (filterState.category && filterState.category !== category) return false;
 
   if (filterState.q) {
-    const haystack = normalizeText(`${item.name} ${item.note || ""} ${city} ${category}`);
+    const haystack = normalizeText(
+      `${item.name} ${item.note || ""} ${item.desc || ""} ${city} ${category}`
+    );
     if (!haystack.includes(normalizeText(filterState.q))) return false;
   }
 
@@ -532,9 +564,19 @@ function matchesFilters(item, city, category) {
 
 function renderChipRow(containerId, values, key) {
   const container = document.getElementById(containerId);
+  const active = filterState[key];
   container.innerHTML =
-    `<button class="chip active" data-value="">Wszystkie</button>` +
-    values.map((v) => `<button class="chip" data-value="${v}">${v}</button>`).join("");
+    `<button class="chip${active ? "" : " active"}" data-value="">Wszystkie</button>` +
+    values
+      .map((v) => {
+        const safe = escapeHtml(v);
+        return `<button class="chip${active === v ? " active" : ""}" data-value="${safe}">${safe}</button>`;
+      })
+      .join("");
+
+  // Listener podpinamy raz — renderChipRow biegnie ponownie po dodaniu atrakcji.
+  if (container.dataset.bound) return;
+  container.dataset.bound = "1";
 
   container.addEventListener("click", (e) => {
     const chip = e.target.closest(".chip");
@@ -547,12 +589,15 @@ function renderChipRow(containerId, values, key) {
 }
 
 function renderFilterChips() {
-  renderChipRow("cityChips", ATTRACTIONS.map((b) => b.city), "city");
+  const blocks = getAttractionBlocks();
+  renderChipRow("cityChips", blocks.map((b) => b.city), "city");
 
-  const categories = [...new Set(ATTRACTIONS.flatMap((b) => b.groups.map((g) => g.category)))];
+  const categories = [...new Set(blocks.flatMap((b) => b.groups.map((g) => g.category)))];
   renderChipRow("categoryChips", categories, "category");
 
   const statusChips = document.getElementById("statusChips");
+  if (statusChips.dataset.bound) return;
+  statusChips.dataset.bound = "1";
   statusChips.addEventListener("click", (e) => {
     const chip = e.target.closest(".chip");
     if (!chip) return;
@@ -570,17 +615,185 @@ function renderProgress() {
   document.getElementById("progressFill").style.width = `${(done / total) * 100}%`;
 }
 
+// ---------- Szczegóły atrakcji ----------
+function openModal(html) {
+  document.getElementById("modalBody").innerHTML = html;
+  document.getElementById("detailModal").classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeDetail() {
+  document.getElementById("detailModal").classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+function openDetail(item, city, category) {
+  const info = ATTRACTION_DETAILS[item.id] || {};
+  const author = USERS.find((u) => u.id === item.author);
+  const desc = info.desc || item.desc;
+
+  openModal(`
+    ${
+      item.photo
+        ? `<div class="modal-photo-wrap">
+             <img class="modal-photo" src="${item.photo}" alt="" />
+             ${authorWatermark(item)}
+           </div>`
+        : ""
+    }
+    <div class="modal-content">
+      <p class="modal-eyebrow">${escapeHtml(city)} · ${escapeHtml(category)}</p>
+      <h2 class="modal-title" id="modalTitle">${escapeHtml(item.name)}</h2>
+      ${item.date ? `<p class="modal-date">🗓️ ${escapeHtml(item.date)}</p>` : ""}
+      <p class="modal-desc">${
+        desc
+          ? escapeHtml(desc)
+          : "Opisu jeszcze nie ma — dopiszcie w komentarzu, co warto wiedzieć."
+      }</p>
+      ${
+        info.tips && info.tips.length
+          ? `<ul class="modal-tips">${info.tips.map((t) => `<li>${t}</li>`).join("")}</ul>`
+          : ""
+      }
+      ${item.note ? `<p class="modal-note">ℹ️ ${escapeHtml(item.note)}</p>` : ""}
+      ${
+        author
+          ? `<p class="modal-author"><img src="${author.avatar}" alt="" />Dodane przez: ${author.name}</p>`
+          : ""
+      }
+      <div class="modal-links">
+        ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
+        ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">🔗 rezerwacja</a>` : ""}
+        ${item.custom ? `<button class="modal-delete" type="button">🗑️ Usuń atrakcję</button>` : ""}
+      </div>
+    </div>
+  `);
+
+  const del = document.querySelector(".modal-delete");
+  if (del) {
+    del.addEventListener("click", () => {
+      if (!confirm(`Usunąć atrakcję „${item.name}”?`)) return;
+      setStoreValue("custom", item.id, "");
+      closeDetail();
+      refreshAttractions();
+    });
+  }
+}
+
+// ---------- Ręczne dodawanie atrakcji ----------
+// Skalujemy zdjęcie w canvasie — pełne zdjęcie z telefonu przepełniłoby localStorage.
+function readPhoto(file) {
+  return new Promise((resolve) => {
+    if (!file) return resolve("");
+    const reader = new FileReader();
+    reader.onerror = () => resolve("");
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => resolve("");
+      img.onload = () => {
+        const scale = Math.min(1, 720 / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.75));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function refreshAttractions() {
+  renderFilterChips();
+  renderAttractions();
+  renderProgress();
+  renderCalendar();
+  renderTimeline();
+}
+
+function openAddForm() {
+  const user = getCurrentUser();
+  const blocks = getAttractionBlocks();
+  const cities = blocks.map((b) => b.city);
+  const categories = [...new Set(blocks.flatMap((b) => b.groups.map((g) => g.category)))];
+  const options = (values) =>
+    values.map((v) => `<option value="${escapeHtml(v)}"></option>`).join("");
+
+  openModal(`
+    <div class="modal-content">
+      <h2 class="modal-title" id="modalTitle">Nowa atrakcja</h2>
+      <form class="add-form" id="addForm">
+        <label>Nazwa
+          <input name="name" type="text" maxlength="90" required />
+        </label>
+        <label>Miasto
+          <input name="city" type="text" list="cityOptions" maxlength="40" required />
+          <datalist id="cityOptions">${options(cities)}</datalist>
+        </label>
+        <label>Kategoria
+          <input name="category" type="text" list="categoryOptions" maxlength="40" required />
+          <datalist id="categoryOptions">${options(categories)}</datalist>
+        </label>
+        <label>Opis (opcjonalnie)
+          <textarea name="desc" rows="3" maxlength="400"></textarea>
+        </label>
+        <label>Zdjęcie (opcjonalnie)
+          <input name="photo" type="file" accept="image/*" />
+        </label>
+        <button class="add-submit" type="submit">Dodaj atrakcję</button>
+        <p class="add-error hidden" id="addError"></p>
+      </form>
+    </div>
+  `);
+
+  const form = document.getElementById("addForm");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const error = document.getElementById("addError");
+    if (!user) {
+      error.textContent = "Najpierw wybierz, kto zwiedza.";
+      error.classList.remove("hidden");
+      return;
+    }
+
+    const submit = form.querySelector(".add-submit");
+    submit.disabled = true;
+    submit.textContent = "Zapisuję…";
+
+    // form.elements, bo form.name to nazwa formularza, nie pole o nazwie "name"
+    const fields = form.elements;
+    const name = fields.name.value.trim();
+    const city = fields.city.value.trim();
+    const item = {
+      id: `custom-${Date.now()}`,
+      name,
+      city,
+      category: fields.category.value.trim(),
+      desc: fields.desc.value.trim(),
+      photo: await readPhoto(fields.photo.files[0]),
+      mapQuery: `${name} ${city}`,
+      author: user.id,
+      custom: true,
+    };
+
+    setStoreValue("custom", item.id, item);
+    closeDetail();
+    refreshAttractions();
+  });
+}
+
 function renderAttractions() {
   const container = document.getElementById("attractionsList");
   container.innerHTML = "";
 
-  ATTRACTIONS.forEach((cityBlock) => {
+  getAttractionBlocks().forEach((cityBlock) => {
     const block = document.createElement("div");
     block.className = "city-block";
 
     const header = document.createElement("div");
     header.className = "city-header";
-    header.innerHTML = `<h2>${cityBlock.city}</h2><span>${cityBlock.dates}</span>`;
+    header.innerHTML = `<h2>${escapeHtml(cityBlock.city)}</h2><span>${escapeHtml(cityBlock.dates)}</span>`;
     block.appendChild(header);
 
     let cityCount = 0;
@@ -615,9 +828,16 @@ function renderAttractions() {
           : `<label class="date-picker">🗓️ <input type="date" data-id="${item.id}" value="${savedDate}" /></label>`;
 
         card.innerHTML = `
-          ${item.photo ? `<div class="thumb"><img src="${item.photo}" alt="${item.name}" loading="lazy" /></div>` : ""}
-          <p class="name">${item.name}</p>
-          ${meta ? `<p class="meta">${meta}</p>` : ""}
+          ${
+            item.photo
+              ? `<div class="thumb">
+                   <img src="${item.photo}" alt="${escapeHtml(item.name)}" loading="lazy" />
+                   ${authorWatermark(item)}
+                 </div>`
+              : ""
+          }
+          <p class="name">${escapeHtml(item.name)}</p>
+          ${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ""}
           <div class="card-links">
             ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">rezerwacja →</a>` : ""}
             ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
@@ -626,7 +846,6 @@ function renderAttractions() {
           <label class="visit-check">
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
           </label>
-          <input class="note-input" type="text" placeholder="Notatka…" />
           <div class="comments">
             <div class="comment-list">${commentsHtml(item.id)}</div>
             <div class="comment-form">
@@ -662,13 +881,10 @@ function renderAttractions() {
           renderTimeline();
         });
 
-        // Wartość ustawiana po innerHTML, żeby cudzysłów w notatce nie rozwalił atrybutu.
-        const noteInput = card.querySelector(".note-input");
-        noteInput.value = getNotes()[item.id] || "";
-        noteInput.addEventListener("change", () => {
-          setNote(item.id, noteInput.value);
-          renderCalendar();
-          renderTimeline();
+        // Klik w kartę otwiera szczegóły, ale nie wtedy, gdy celem był link lub kontrolka.
+        card.addEventListener("click", (e) => {
+          if (e.target.closest("a, input, button, label")) return;
+          openDetail(item, cityBlock.city, group.category);
         });
 
         // Odświeżamy tylko listę komentarzy tej karty — pełny re-render zabrałby fokus.
@@ -785,10 +1001,18 @@ function init() {
     btn.addEventListener("click", () => switchView(btn.dataset.view));
   });
 
+  document.getElementById("modalClose").addEventListener("click", closeDetail);
+  document.querySelector(".modal-backdrop").addEventListener("click", closeDetail);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDetail();
+  });
+
   document.getElementById("searchInput").addEventListener("input", (e) => {
     filterState.q = e.target.value;
     renderAttractions();
   });
+
+  document.getElementById("addAttractionBtn").addEventListener("click", openAddForm);
 
   renderLoginPanel();
   renderFilterChips();
