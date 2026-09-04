@@ -327,49 +327,60 @@ function eventCardHtml(ev) {
   `;
 }
 
+// Podpis pod nazwą dnia: który to dzień wyjazdu (poza terminem — sama data)
+function daySubtitle(dateKey) {
+  const keys = tripDayKeys();
+  const i = keys.indexOf(dateKey);
+  return i === -1 ? formatDayDate(dateKey) : `${i + 1}. dzień z ${keys.length}`;
+}
+
+// Wnętrze karty dnia — używane i w osi czasu, i w oknie dnia z kalendarza
+function dayCardHtml(dateKey, dayEvents) {
+  const sorted = dayEvents
+    .slice()
+    .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
+  const context = sorted.filter(isContextEvent);
+  const main = sorted.filter((ev) => !isContextEvent(ev));
+  const { dow, dayNum, monShort } = dayLabel(dateKey);
+
+  return `
+    <header class="day-head">
+      <div class="day-date-box">
+        <span class="day-num-big">${dayNum}</span>
+        <span class="day-mon">${monShort}</span>
+      </div>
+      <div class="day-head-text">
+        <p class="day-dow">${dow}</p>
+        <p class="day-sub">${daySubtitle(dateKey)}</p>
+      </div>
+    </header>
+    ${
+      context.length
+        ? `<div class="day-context">${context
+            .map((ev) => contextRowHtml(ev, dateKey))
+            .join("")}</div>`
+        : ""
+    }
+    <div class="day-events">${
+      main.length
+        ? `<p class="day-section">W planie</p>` + main.map(eventCardHtml).join("")
+        : `<p class="day-empty">Dzień wolny 🐾</p>`
+    }</div>
+  `;
+}
+
 function renderTimeline() {
   const container = document.getElementById("timelineDays");
   container.innerHTML = "";
 
   const eventsByDay = buildEventsByDay([...EVENTS, ...buildPlannedEvents()]);
   const todayKey = toLocalKey(new Date());
-  const keys = tripDayKeys();
 
-  keys.forEach((key, i) => {
-    const dayEvents = (eventsByDay[key] || [])
-      .slice()
-      .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
-    const context = dayEvents.filter(isContextEvent);
-    const main = dayEvents.filter((ev) => !isContextEvent(ev));
-    const { dow, dayNum, monShort } = dayLabel(key);
-
+  tripDayKeys().forEach((key) => {
     const card = document.createElement("article");
     card.className = "day-card" + (key === todayKey ? " today" : "");
     card.dataset.date = key;
-    card.innerHTML = `
-      <header class="day-head">
-        <div class="day-date-box">
-          <span class="day-num-big">${dayNum}</span>
-          <span class="day-mon">${monShort}</span>
-        </div>
-        <div class="day-head-text">
-          <p class="day-dow">${dow}</p>
-          <p class="day-sub">${i + 1}. dzień z ${keys.length}</p>
-        </div>
-      </header>
-      ${
-        context.length
-          ? `<div class="day-context">${context
-              .map((ev) => contextRowHtml(ev, key))
-              .join("")}</div>`
-          : ""
-      }
-      <div class="day-events">${
-        main.length
-          ? `<p class="day-section">W planie</p>` + main.map(eventCardHtml).join("")
-          : `<p class="day-empty">Dzień wolny 🐾</p>`
-      }</div>
-    `;
+    card.innerHTML = dayCardHtml(key, eventsByDay[key] || []);
     container.appendChild(card);
   });
 }
@@ -508,19 +519,11 @@ function renderMonth(year, month, eventsByDay) {
   return monthEl;
 }
 
+// Plan dnia w oknie na środku ekranu — panel na dole kalendarza wymagał scrollowania.
 function showDayDetails(dateKey, events, cellEl) {
   document.querySelectorAll(".day-cell.selected").forEach((c) => c.classList.remove("selected"));
   cellEl.classList.add("selected");
-
-  const panel = document.getElementById("dayDetails");
-  const [y, m, d] = dateKey.split("-");
-  const dateObj = new Date(dateKey + "T00:00:00");
-  const formatted = `${Number(d)} ${MONTH_NAMES_GEN[dateObj.getMonth()]} ${y}`;
-
-  panel.innerHTML = `<h3>${formatted}</h3>` + events.map(eventCardHtml).join("");
-
-  panel.classList.remove("hidden");
-  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  openModal(`<article class="day-card">${dayCardHtml(dateKey, events)}</article>`);
 }
 
 function renderCalendar() {
@@ -635,10 +638,7 @@ function openDetail(item, city, category) {
   openModal(`
     ${
       item.photo
-        ? `<div class="modal-photo-wrap">
-             <img class="modal-photo" src="${item.photo}" alt="" />
-             ${authorWatermark(item)}
-           </div>`
+        ? `<div class="modal-photo-wrap"><img class="modal-photo" src="${item.photo}" alt="" /></div>`
         : ""
     }
     <div class="modal-content">
@@ -666,8 +666,31 @@ function openDetail(item, city, category) {
         ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">🔗 rezerwacja</a>` : ""}
         ${item.custom ? `<button class="modal-delete" type="button">🗑️ Usuń atrakcję</button>` : ""}
       </div>
+      <div class="comments">
+        <div class="comment-list">${commentsHtml(item.id)}</div>
+        <div class="comment-form">
+          <input class="comment-input" type="text" placeholder="Komentarz…" />
+          <button class="comment-send" type="button">Dodaj</button>
+        </div>
+      </div>
     </div>
   `);
+
+  const body = document.getElementById("modalBody");
+  const commentList = body.querySelector(".comment-list");
+  const commentInput = body.querySelector(".comment-input");
+  const submitComment = () => {
+    if (!addComment(item.id, commentInput.value)) return;
+    commentInput.value = "";
+    commentList.innerHTML = commentsHtml(item.id);
+    // Karta na liście ma własną kopię komentarzy — odświeżamy tylko ją.
+    const cardList = document.querySelector(`.attraction-card[data-id="${item.id}"] .comment-list`);
+    if (cardList) cardList.innerHTML = commentsHtml(item.id);
+  };
+  body.querySelector(".comment-send").addEventListener("click", submitComment);
+  commentInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") submitComment();
+  });
 
   const del = document.querySelector(".modal-delete");
   if (del) {
@@ -820,6 +843,7 @@ function renderAttractions() {
         const card = document.createElement("div");
         const isVisited = Boolean(getVisited()[item.id]);
         card.className = "attraction-card" + (isVisited ? " visited" : "");
+        card.dataset.id = item.id;
         const meta = [item.date, item.note].filter(Boolean).join(" · ");
         const savedDate = getUserDates()[item.id] || "";
 
