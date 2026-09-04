@@ -1,0 +1,5 @@
+.DS_Store
+.claude/
+
+# Luźne grafiki robocze w katalogu głównym (assets/ zostaje śledzone)
+/*.png

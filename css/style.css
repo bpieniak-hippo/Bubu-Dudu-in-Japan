@@ -1,0 +1,446 @@
+:root {
+  --pink: #f7a8c4;
+  --pink-dark: #e8749e;
+  --blue: #a8d0f0;
+  --blue-dark: #5b9bd5;
+  --cream: #fff6f0;
+  --text: #4a3b3b;
+  --radius: 18px;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --nav-h: 64px;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  font-family: "Hiragino Maru Gothic ProN", "Segoe UI", system-ui, sans-serif;
+  background: var(--cream);
+  color: var(--text);
+}
+
+.hidden { display: none !important; }
+
+/* ---------- NAV ---------- */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, var(--pink), var(--blue));
+  box-shadow: var(--shadow);
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.nav-btn:hover { transform: translateY(-2px); }
+.nav-btn.active {
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  color: var(--pink-dark);
+}
+
+/* ---------- COVER ---------- */
+.view-cover {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 16px;
+  background: var(--cream);
+}
+
+/* Grafika okładki ma wbudowany tytuł, więc pokazujemy ją w całości (contain). */
+.cover-bg {
+  width: min(90vw, 68vh, 620px);
+  aspect-ratio: 1 / 1;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* Tytuł i podtytuł są już na grafice — zostają w DOM, ale ich nie dublujemy. */
+.cover-overlay,
+.cover-title,
+.cover-subtitle {
+  display: none;
+}
+
+.cover-content {
+  text-align: center;
+}
+
+.btn-start {
+  font-size: 1.15rem;
+  font-weight: 800;
+  padding: 16px 40px;
+  border: none;
+  border-radius: 999px;
+  background: var(--pink-dark);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s;
+}
+
+.btn-start:hover { transform: scale(1.05); }
+
+/* ---------- CALENDAR ---------- */
+.view { padding: 16px; max-width: 900px; margin: 0 auto; }
+
+.calendar-months {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.month {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.month h2 {
+  margin: 0 0 12px;
+  text-align: center;
+  color: var(--pink-dark);
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #999;
+  padding-bottom: 4px;
+}
+
+.day-cell {
+  min-height: 58px;
+  border-radius: 10px;
+  background: #fdf2f6;
+  padding: 4px;
+  cursor: default;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 2px solid transparent;
+}
+
+.day-cell.empty { background: transparent; }
+
+.day-cell.has-events {
+  cursor: pointer;
+  background: #ffe3ee;
+}
+
+.day-cell.has-events:hover { border-color: var(--pink-dark); }
+
+.day-cell.selected { border-color: var(--blue-dark); background: #dcefff; }
+
+.day-num { font-size: 0.8rem; font-weight: 700; }
+
+.day-icons { font-size: 0.85rem; line-height: 1; }
+
+.day-details {
+  margin-top: 20px;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.day-details h3 { margin-top: 0; color: var(--pink-dark); }
+
+.event-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0e0e6;
+}
+
+.event-card:last-child { border-bottom: none; }
+
+.event-icon { font-size: 1.4rem; }
+
+.event-title { font-weight: 700; margin: 0; }
+.event-details { margin: 2px 0 0; font-size: 0.9rem; color: #6b5a5a; }
+.event-details a { color: var(--blue-dark); }
+
+/* ---------- ATTRACTIONS ---------- */
+.city-block {
+  margin-bottom: 28px;
+}
+
+.city-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.city-header h2 { margin: 0; color: var(--pink-dark); }
+.city-header span { font-size: 0.85rem; color: #999; }
+
+.category-block { margin-bottom: 14px; }
+
+.category-title {
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--blue-dark);
+  margin: 0 0 8px;
+}
+
+.attraction-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.attraction-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.attraction-card .thumb {
+  margin: -12px -14px 10px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #f0e0e6;
+}
+
+.attraction-card .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.attraction-card.no-photo { padding-top: 12px; }
+
+.attraction-card .name { font-weight: 700; margin: 0 0 4px; }
+.attraction-card .meta { font-size: 0.82rem; color: #7a6a6a; margin: 0 0 6px; }
+.attraction-card a { color: var(--blue-dark); font-size: 0.82rem; }
+
+.attraction-card .card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.attraction-card .date-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--pink-dark);
+}
+
+.attraction-card .date-picker input {
+  border: 1px solid #f0c0d0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.attraction-card .visit-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.attraction-card .visit-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--pink-dark);
+}
+
+.attraction-card .note-input {
+  width: 100%;
+  border: 1px solid #f0c0d0;
+  border-radius: 8px;
+  padding: 8px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.attraction-card.visited {
+  opacity: 0.72;
+  border-left: 3px solid #7bc47f;
+}
+
+.empty-msg {
+  text-align: center;
+  color: #999;
+  padding: 32px 0;
+}
+
+/* ---------- DZIEŃ PO DNIU ---------- */
+.timeline-days {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.day-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+  border: 2px solid transparent;
+  scroll-margin-block: 12px calc(var(--nav-h) + 12px);
+}
+
+.day-card.today { border-color: var(--blue-dark); }
+.day-card.today .day-head { background: #dcefff; margin: -14px -14px 10px; padding: 14px; border-radius: 14px 14px 0 0; }
+
+.day-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.day-dow { font-weight: 800; color: var(--pink-dark); }
+.day-date { font-size: 0.9rem; color: #7a6a6a; }
+.day-idx { margin-left: auto; font-size: 0.75rem; color: #bbb; }
+
+.day-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.ctx-chip {
+  background: #fdf2f6;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  color: #7a6a6a;
+}
+
+.day-empty { margin: 0; color: #bbb; font-style: italic; }
+
+/* ---------- FILTRY ---------- */
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.search-input {
+  width: 100%;
+  border: 1px solid #f0c0d0;
+  border-radius: var(--radius);
+  padding: 12px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex: none;
+  min-height: 36px;
+  white-space: nowrap;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.chip.active { background: var(--pink-dark); color: #fff; }
+
+.progress-label { margin: 4px 0 0; font-size: 0.8rem; color: #999; }
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #f0e0e6;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--pink-dark);
+  transition: width 0.2s;
+}
+
+/* ---------- TELEFON ---------- */
+@media (max-width: 700px) {
+  .nav {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 0;
+    padding: 8px calc(12px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom))
+      calc(12px + env(safe-area-inset-left));
+  }
+
+  .nav-btn { min-height: 48px; padding: 8px 4px; font-size: 0.78rem; }
+
+  body.app-started .view {
+    padding-bottom: calc(16px + var(--nav-h) + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 480px) {
+  .day-cell { min-height: 48px; }
+}
