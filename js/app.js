@@ -9,6 +9,10 @@ const MONTH_NAMES_GEN = [
   "stycznia", "lutego", "marca", "kwietnia", "maja", "czerwca",
   "lipca", "sierpnia", "września", "października", "listopada", "grudnia",
 ];
+const MONTH_SHORT = [
+  "sty", "lut", "mar", "kwi", "maj", "cze",
+  "lip", "sie", "wrz", "paź", "lis", "gru",
+];
 const WEEKDAYS = ["Pn", "Wt", "Śr", "Cz", "Pt", "So", "Nd"];
 const WEEKDAYS_LONG = [
   "Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela",
@@ -51,6 +55,8 @@ const STORE_KEYS = {
   dates: "bubuDudu.attractionDates",
   visited: "bubuDudu.attractionVisited",
   notes: "bubuDudu.attractionNotes",
+  comments: "bubuDudu.attractionComments",
+  session: "bubuDudu.session",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -100,6 +106,69 @@ function getNotes() {
 
 function setNote(id, text) {
   setStoreValue("notes", id, text.trim());
+}
+
+// ---------- Zalogowany użytkownik ----------
+function getCurrentUser() {
+  const id = loadStore("session").user;
+  return USERS.find((u) => u.id === id) || null;
+}
+
+function setCurrentUser(id) {
+  setStoreValue("session", "user", id);
+}
+
+// ---------- Komentarze ----------
+function getComments() {
+  return loadStore("comments");
+}
+
+function addComment(attractionId, text) {
+  const user = getCurrentUser();
+  const clean = text.trim();
+  if (!user || !clean) return false;
+  const list = getComments()[attractionId] || [];
+  setStoreValue("comments", attractionId, [
+    ...list,
+    { user: user.id, text: clean, ts: Date.now() },
+  ]);
+  return true;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+  );
+}
+
+function formatStamp(ts) {
+  return new Date(ts).toLocaleString("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function commentsHtml(attractionId) {
+  const list = getComments()[attractionId] || [];
+  if (!list.length) return `<p class="comment-empty">Brak komentarzy</p>`;
+  return list
+    .map((c) => {
+      const author = USERS.find((u) => u.id === c.user);
+      return `
+        <div class="comment">
+          <img class="comment-avatar" src="${author ? author.avatar : ""}" alt="" />
+          <div class="comment-body">
+            <p class="comment-meta">${author ? author.name : c.user} · ${formatStamp(c.ts)}</p>
+            <p class="comment-text">${escapeHtml(c.text)}</p>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 // Spłaszcza ATTRACTIONS do listy pojedynczych pozycji
@@ -161,33 +230,72 @@ function isContextEvent(ev) {
   return ev.type === "hotel" || ev.type === "car" || ev.type === "sumo";
 }
 
-function contextChipText(ev, dateKey) {
-  if (ev.type !== "hotel") return `${ev.icon} ${ev.title.replace(/^.*?: /, "")}`;
-  let phase = "nocleg";
-  if (dateKey === ev.startDate) phase = "zameldowanie";
-  else if (dateKey === ev.endDate) phase = "wymeldowanie";
-  return `${ev.icon} ${ev.city} · ${phase}`;
+// Wiersz kontekstu dnia: hotel z adresem, auto z numerem rezerwacji, turniej sumo.
+function contextRowHtml(ev, dateKey) {
+  const lines = [];
+  let phase = ev.details || "";
+
+  if (ev.type === "hotel") {
+    if (dateKey === ev.startDate) {
+      phase = `Zameldowanie${ev.checkIn ? ` · ${ev.checkIn}` : ""}`;
+    } else if (dateKey === ev.endDate) {
+      phase = `Wymeldowanie${ev.checkOut ? ` · ${ev.checkOut}` : ""}`;
+    } else {
+      phase = `Nocleg${ev.city ? ` · ${ev.city}` : ""}`;
+    }
+    if (ev.phone) lines.push(`☎️ ${ev.phone}`);
+  } else if (ev.type === "car") {
+    if (dateKey === ev.startDate) phase = "Odbiór auta · Naha Airport";
+    else if (dateKey === ev.endDate) phase = "Zwrot auta · Naha Airport";
+    else phase = "Auto do dyspozycji";
+    if (ev.ref) lines.push(`Nr rezerwacji: ${ev.ref}`);
+  }
+
+  if (ev.address) lines.unshift(`📍 ${ev.address}`);
+
+  return `
+    <div class="ctx-row">
+      <span class="ctx-icon">${ev.icon}</span>
+      <div class="ctx-body">
+        <p class="ctx-title">${ev.title}</p>
+        ${phase ? `<p class="ctx-phase">${phase}</p>` : ""}
+        ${lines.map((l) => `<p class="ctx-line">${l}</p>`).join("")}
+        <div class="ctx-links">
+          ${ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">mapa</a>` : ""}
+          ${ev.booking ? `<a href="${ev.booking}" target="_blank" rel="noopener">rezerwacja</a>` : ""}
+          ${ev.site ? `<a href="${ev.site}" target="_blank" rel="noopener">strona hotelu</a>` : ""}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function dayLabel(dateKey) {
   const d = new Date(dateKey + "T00:00:00");
   return {
     dow: WEEKDAYS_LONG[(d.getDay() + 6) % 7],
-    date: `${d.getDate()} ${MONTH_NAMES_GEN[d.getMonth()]}`,
+    dayNum: d.getDate(),
+    monShort: MONTH_SHORT[d.getMonth()],
   };
+}
+
+function formatDayDate(dateKey) {
+  const d = new Date(dateKey + "T00:00:00");
+  return `${d.getDate()} ${MONTH_NAMES_GEN[d.getMonth()]}`;
 }
 
 function eventCardHtml(ev) {
   const notes = getNotes();
   const note = ev.attractionId ? notes[ev.attractionId] : "";
   const details = [ev.details, note ? `📝 ${note}` : ""].filter(Boolean).join(" · ");
+  const link = ev.link || ev.booking;
   return `
     <div class="event-card">
       <div class="event-icon">${ev.icon}</div>
       <div>
         <p class="event-title">${ev.title}</p>
         <p class="event-details">${details}${
-          ev.link ? ` · <a href="${ev.link}" target="_blank" rel="noopener">link</a>` : ""
+          link ? ` · <a href="${link}" target="_blank" rel="noopener">link</a>` : ""
         }</p>
       </div>
     </div>
@@ -208,32 +316,107 @@ function renderTimeline() {
       .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
     const context = dayEvents.filter(isContextEvent);
     const main = dayEvents.filter((ev) => !isContextEvent(ev));
-    const { dow, date } = dayLabel(key);
+    const { dow, dayNum, monShort } = dayLabel(key);
 
     const card = document.createElement("article");
     card.className = "day-card" + (key === todayKey ? " today" : "");
     card.dataset.date = key;
     card.innerHTML = `
       <header class="day-head">
-        <span class="day-dow">${dow}</span>
-        <span class="day-date">${date}</span>
-        <span class="day-idx">${i + 1}/${keys.length}</span>
+        <div class="day-date-box">
+          <span class="day-num-big">${dayNum}</span>
+          <span class="day-mon">${monShort}</span>
+        </div>
+        <div class="day-head-text">
+          <p class="day-dow">${dow}</p>
+          <p class="day-sub">${i + 1}. dzień z ${keys.length}</p>
+        </div>
       </header>
       ${
         context.length
           ? `<div class="day-context">${context
-              .map((ev) => `<span class="ctx-chip">${contextChipText(ev, key)}</span>`)
+              .map((ev) => contextRowHtml(ev, key))
               .join("")}</div>`
           : ""
       }
       <div class="day-events">${
         main.length
-          ? main.map(eventCardHtml).join("")
+          ? `<p class="day-section">W planie</p>` + main.map(eventCardHtml).join("")
           : `<p class="day-empty">Dzień wolny 🐾</p>`
       }</div>
     `;
     container.appendChild(card);
   });
+}
+
+// ---------- Widok "Podróż" ----------
+const LOGISTICS_SECTIONS = [
+  { type: "flight", title: "✈️ Loty" },
+  { type: "train", title: "🚄 Shinkansen" },
+  { type: "hotel", title: "🏨 Noclegi" },
+  { type: "car", title: "🚗 Wynajem auta" },
+  { type: "ticket", title: "🎟️ Wykupione bilety" },
+];
+
+function logisticsCardHtml(ev) {
+  const range = ev.date
+    ? formatDayDate(ev.date)
+    : `${formatDayDate(ev.startDate)} – ${formatDayDate(ev.endDate)}`;
+
+  const rows = [
+    ["Adres", ev.address],
+    ["Zameldowanie", ev.checkIn],
+    ["Wymeldowanie", ev.checkOut],
+    ["Przewoźnik", ev.carrier],
+    ["Wylot", ev.depart],
+    ["Przylot", ev.arrive],
+    ["Telefon", ev.phone],
+    ["Nr rezerwacji", ev.ref],
+  ].filter(([, v]) => v);
+
+  return `
+    <article class="trip-card">
+      <header class="trip-head">
+        <span class="trip-icon">${ev.icon}</span>
+        <div>
+          <p class="trip-title">${ev.title}</p>
+          <p class="trip-range">${range}</p>
+        </div>
+      </header>
+      ${
+        rows.length
+          ? `<dl class="trip-rows">${rows
+              .map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`)
+              .join("")}</dl>`
+          : ""
+      }
+      ${
+        ev.extra && ev.extra.length
+          ? `<ul class="trip-extra">${ev.extra.map((e) => `<li>${e}</li>`).join("")}</ul>`
+          : ""
+      }
+      <div class="trip-links">
+        ${ev.mapQuery ? `<a href="${mapsUrl(ev.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
+        ${ev.booking ? `<a href="${ev.booking}" target="_blank" rel="noopener">🛏️ rezerwacja</a>` : ""}
+        ${ev.site ? `<a href="${ev.site}" target="_blank" rel="noopener">🌐 strona</a>` : ""}
+        ${ev.link ? `<a href="${ev.link}" target="_blank" rel="noopener">🔗 link</a>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function renderLogistics() {
+  const container = document.getElementById("logisticsList");
+  container.innerHTML = LOGISTICS_SECTIONS.map((section) => {
+    const items = EVENTS.filter((ev) => ev.type === section.type);
+    if (!items.length) return "";
+    return `
+      <section class="trip-section">
+        <h2 class="trip-section-title">${section.title}</h2>
+        ${items.map(logisticsCardHtml).join("")}
+      </section>
+    `;
+  }).join("");
 }
 
 function renderMonth(year, month, eventsByDay) {
@@ -444,6 +627,13 @@ function renderAttractions() {
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
           </label>
           <input class="note-input" type="text" placeholder="Notatka…" />
+          <div class="comments">
+            <div class="comment-list">${commentsHtml(item.id)}</div>
+            <div class="comment-form">
+              <input class="comment-input" type="text" placeholder="Komentarz…" />
+              <button class="comment-send" type="button">Dodaj</button>
+            </div>
+          </div>
         `;
 
         const img = card.querySelector(".thumb img");
@@ -481,6 +671,19 @@ function renderAttractions() {
           renderTimeline();
         });
 
+        // Odświeżamy tylko listę komentarzy tej karty — pełny re-render zabrałby fokus.
+        const commentList = card.querySelector(".comment-list");
+        const commentInput = card.querySelector(".comment-input");
+        const submitComment = () => {
+          if (!addComment(item.id, commentInput.value)) return;
+          commentInput.value = "";
+          commentList.innerHTML = commentsHtml(item.id);
+        };
+        card.querySelector(".comment-send").addEventListener("click", submitComment);
+        commentInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") submitComment();
+        });
+
         cards.appendChild(card);
       });
 
@@ -494,6 +697,47 @@ function renderAttractions() {
   if (!container.children.length) {
     container.innerHTML = `<p class="empty-msg">Nic nie pasuje 🐼</p>`;
   }
+}
+
+// ---------- Logowanie ----------
+function renderUserBadge() {
+  const badge = document.getElementById("userBadge");
+  const user = getCurrentUser();
+  if (!user || !document.body.classList.contains("app-started")) {
+    badge.classList.add("hidden");
+    return;
+  }
+  badge.innerHTML = `<img src="${user.avatar}" alt="" /><span>${user.name}</span>`;
+  badge.classList.remove("hidden");
+}
+
+function selectUser(id) {
+  setCurrentUser(id);
+  document.querySelectorAll(".login-user").forEach((b) => {
+    b.classList.toggle("active", b.dataset.id === id);
+  });
+  document.getElementById("startBtn").disabled = false;
+  renderUserBadge();
+}
+
+function renderLoginPanel() {
+  const panel = document.getElementById("loginPanel");
+  panel.innerHTML = USERS.map(
+    (u) => `
+      <button class="login-user" type="button" data-id="${u.id}">
+        <img src="${u.avatar}" alt="" />
+        <span>${u.name}</span>
+      </button>
+    `
+  ).join("");
+
+  panel.addEventListener("click", (e) => {
+    const btn = e.target.closest(".login-user");
+    if (btn) selectUser(btn.dataset.id);
+  });
+
+  const saved = getCurrentUser();
+  if (saved) selectUser(saved.id);
 }
 
 let scrolledToToday = false;
@@ -522,9 +766,19 @@ function init() {
   document.getElementById("tripSubtitle").textContent = TRIP.subtitle;
 
   document.getElementById("startBtn").addEventListener("click", () => {
+    if (!getCurrentUser()) return;
     document.body.classList.add("app-started");
     document.getElementById("nav").classList.remove("hidden");
-    switchView("timeline");
+    switchView("calendar");
+    renderUserBadge();
+  });
+
+  // Klik w plakietkę wraca na ekran startowy, żeby zmienić użytkownika.
+  document.getElementById("userBadge").addEventListener("click", () => {
+    document.body.classList.remove("app-started");
+    document.getElementById("nav").classList.add("hidden");
+    switchView("cover");
+    renderUserBadge();
   });
 
   document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -536,7 +790,9 @@ function init() {
     renderAttractions();
   });
 
+  renderLoginPanel();
   renderFilterChips();
+  renderLogistics();
   renderTimeline();
   renderCalendar();
   renderAttractions();

@@ -9,37 +9,61 @@ const TRIP = {
   endDate: "2026-10-02",
 };
 
-// Wydarzenia z konkretną datą (lub zakresem dat) — trafiają na kalendarz.
+// Użytkownicy aplikacji — logowanie samą nazwą, bez hasła.
+const USERS = [
+  { id: "bartek", name: "Bartek", avatar: "assets/avatars/bartek.jpg" },
+  { id: "paula", name: "Paula", avatar: "assets/avatars/paula.jpg" },
+];
+
+// Wydarzenia z konkretną datą (lub zakresem dat) — kalendarz, „Dzień po dniu” i zakładka Podróż.
 // type: flight | train | hotel | car | ticket | attraction | sumo
+// Pola opisowe (opcjonalne): address, mapQuery, checkIn, checkOut, phone, booking,
+// site, ref, depart, arrive, extra[] — karta pokazuje tylko te, które są wypełnione.
 const EVENTS = [
   // Loty
   {
     date: "2026-09-14",
     type: "flight",
     icon: "✈️",
-    title: "Lot: Warszawa → Tokyo Narita",
+    title: "Warszawa → Tokyo Narita",
     details: "LOT · przylot 06:35",
+    carrier: "LOT",
+    arrive: "06:35",
+    mapQuery: "Narita International Airport",
+    extra: ["Narita → Tokyo Station: Narita Express (rezerwacja jeszcze do zrobienia)"],
   },
   {
     date: "2026-09-25",
     type: "flight",
     icon: "✈️",
-    title: "Lot: Haneda → Naha",
-    details: "ANA · wylot 13:05, przylot 15:40",
+    title: "Haneda → Naha",
+    details: "ANA · 13:05 → 15:40",
+    carrier: "ANA",
+    depart: "13:05",
+    arrive: "15:40",
+    mapQuery: "Naha Airport, Okinawa",
   },
   {
     date: "2026-09-30",
     type: "flight",
     icon: "✈️",
-    title: "Lot: Naha → Haneda",
-    details: "ANA · wylot 16:35, przylot 19:15",
+    title: "Naha → Haneda",
+    details: "ANA · 16:35 → 19:15",
+    carrier: "ANA",
+    depart: "16:35",
+    arrive: "19:15",
+    mapQuery: "Haneda Airport, Tokyo",
   },
   {
     date: "2026-10-02",
     type: "flight",
     icon: "✈️",
-    title: "Lot: Tokyo Narita → Warszawa",
+    title: "Tokyo Narita → Warszawa",
     details: "LOT · wylot 12:00 · Terminal 1",
+    carrier: "LOT",
+    depart: "12:00",
+    mapQuery: "Narita Airport Terminal 1",
+    extra: ["Odprawa w Terminalu 1"],
   },
 
   // Shinkansen
@@ -49,6 +73,14 @@ const EVENTS = [
     icon: "🚄",
     title: "Shinkansen: Tokyo → Kyoto",
     details: "Nozomi 371 · 11:09 → 13:21",
+    carrier: "Nozomi 371",
+    depart: "11:09",
+    arrive: "13:21",
+    mapQuery: "Tokyo Station",
+    extra: [
+      "✅ bilety kupione",
+      "Walizki powyżej 160 cm sumy wymiarów wymagają miejsca ze strefą bagażową",
+    ],
   },
   {
     date: "2026-09-19",
@@ -56,6 +88,11 @@ const EVENTS = [
     icon: "🚄",
     title: "Shinkansen: Kyoto → Tokyo",
     details: "Nozomi 426 · 15:06 → 17:21",
+    carrier: "Nozomi 426",
+    depart: "15:06",
+    arrive: "17:21",
+    mapQuery: "Kyoto Station",
+    extra: ["✅ bilety kupione"],
   },
 
   // Hotele (zakresy)
@@ -65,9 +102,16 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Kioto",
-    title: "Nocleg: Kioto",
-    details: "Stay Sakura Kyoto Matsuri — pralnia samoobsługowa (monety), kuchenka",
-    link: "https://www.booking.com/hotel/jp/stay-sakura-kyoto-matsuri.pl.html",
+    title: "Stay SAKURA Kyoto Matsuri",
+    details: "Kioto · 5 nocy",
+    address: "115 Isematsucho, Shimogyo-ku, Kyoto 600-8254",
+    mapQuery: "Stay SAKURA Kyoto Matsuri",
+    checkIn: "15:00–21:00",
+    checkOut: "11:00",
+    phone: "050-2018-7885",
+    booking: "https://www.booking.com/hotel/jp/stay-sakura-kyoto-matsuri.pl.html",
+    site: "https://en.stay-sakura.com/matsuri",
+    extra: ["Pralnia samoobsługowa na monety 100 ¥ (pranie 30–40 min + suszenie 30–40 min)", "Kuchenka w pokoju"],
   },
   {
     startDate: "2026-09-19",
@@ -75,9 +119,18 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Tokio",
-    title: "Nocleg: Tokio (1)",
-    details: "Stay Sakura Tokyo Asakusa Yokozuna — pralnia samoobsługowa",
-    link: "https://www.booking.com/hotel/jp/stay-sakura-tokyo-asakusa-yokozuna.pl.html",
+    title: "Stay SAKURA Tokyo Asakusa Yokozuna",
+    details: "Tokio, 1. pobyt · 6 nocy",
+    address: "3-30-5 Asakusa, Taito-ku, Tokyo 111-0032",
+    mapQuery: "Stay SAKURA Tokyo Asakusa Yokozuna",
+    checkIn: "15:00",
+    checkOut: "11:00",
+    booking: "https://www.booking.com/hotel/jp/stay-sakura-tokyo-asakusa-yokozuna.pl.html",
+    extra: [
+      "Pralnia samoobsługowa na monety 100 ¥",
+      "Ok. 12 min pieszo od stacji Asakusa",
+      "Późne wymeldowanie płatne (od 1000 ¥/h), maks. do 13:00",
+    ],
   },
   {
     startDate: "2026-09-25",
@@ -85,9 +138,14 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Okinawa",
-    title: "Nocleg: Okinawa",
-    details: "Aquasense Amp Resort",
-    link: "https://www.booking.com/hotel/jp/aquasense-amp-resort.pl.html",
+    title: "AQUASENSE Hotel & Resort",
+    details: "Okinawa · 5 nocy",
+    address: "86-1 Fuchaku Kurosakibaru, Onna-son, Kunigami-gun, Okinawa 904-0413",
+    mapQuery: "AQUASENSE Hotel & Resort, Onna",
+    checkIn: "16:00",
+    checkOut: "11:00",
+    booking: "https://www.booking.com/hotel/jp/aquasense-amp-resort.pl.html",
+    extra: ["Dojazd autem z lotniska Naha (wynajem na miejscu)"],
   },
   {
     startDate: "2026-09-30",
@@ -95,9 +153,16 @@ const EVENTS = [
     type: "hotel",
     icon: "🏨",
     city: "Tokio",
-    title: "Nocleg: Tokio (2)",
-    details: "Stay Sakura Tokyo Edo no Mai — pralnia samoobsługowa",
-    link: "https://www.booking.com/hotel/jp/stay-sakura-tokyo-edo-no-mai.pl.html",
+    title: "Stay SAKURA Tokyo Asakusa Edo no Mai",
+    details: "Tokio, 2. pobyt · 2 noce",
+    address: "1-6-3 Senzoku, Taito-ku, Tokyo",
+    mapQuery: "Stay SAKURA Tokyo Asakusa Edo no Mai",
+    checkIn: "15:00–21:00",
+    checkOut: "11:00",
+    phone: "050-2018-7882",
+    booking: "https://www.booking.com/hotel/jp/stay-sakura-tokyo-edo-no-mai.pl.html",
+    site: "https://en.stay-sakura.com/edonomai",
+    extra: ["Pralnia samoobsługowa na monety 100 ¥"],
   },
 
   // Wynajem auta
@@ -106,8 +171,17 @@ const EVENTS = [
     endDate: "2026-09-30",
     type: "car",
     icon: "🚗",
-    title: "Wynajem auta: Okinawa",
-    details: "Toyota Rent-a-Lease, Naha Airport · rezerwacja 99915703500 · CDW+NOC wliczone",
+    title: "Toyota Rent-a-Lease — Okinawa",
+    details: "Odbiór i zwrot: Naha Airport",
+    address: "Naha Airport, Okinawa",
+    mapQuery: "Toyota Rent a Car Naha Airport",
+    ref: "99915703500",
+    extra: [
+      "✅ rezerwacja opłacona",
+      "Ubezpieczenie CDW + NOC wliczone w cenę",
+      "⚠️ Każdą szkodę, nawet drobną, trzeba zgłosić na policję",
+      "Potrzebne międzynarodowe prawo jazdy",
+    ],
   },
 
   // Bilety
@@ -117,7 +191,10 @@ const EVENTS = [
     icon: "🎟️",
     title: "Muzeum Ghibli",
     details: "Godz. 12:00 · ✅ kupione",
+    address: "1-1-83 Shimorenjaku, Mitaka, Tokyo",
+    mapQuery: "Ghibli Museum, Mitaka",
     attractionId: "tokyo1-ghibli",
+    extra: ["Wejście tylko o wyznaczonej godzinie — spóźnienie oznacza przepadek biletu"],
   },
 
   // Atrakcje z konkretną datą
@@ -283,24 +360,6 @@ const ATTRACTIONS = [
             note: "✅ kupione",
             mapQuery: "Ghibli Museum, Mitaka",
             photo: "assets/attractions/tokyo1-ghibli.jpg",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    city: "Okinawa",
-    dates: "25–30 września",
-    groups: [
-      {
-        category: "Logistyka",
-        items: [
-          {
-            id: "okinawa-car-rental",
-            name: "Wynajem auta — Toyota Rent-a-Lease, Naha Airport",
-            note: "rezerwacja 99915703500, CDW+NOC wliczone",
-            mapQuery: "Naha Airport, Okinawa",
-            photo: "assets/attractions/okinawa-car-rental.jpg",
           },
         ],
       },

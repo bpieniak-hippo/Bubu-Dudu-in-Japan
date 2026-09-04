@@ -12,9 +12,12 @@
 
   <!-- NAWIGACJA (widoczna poza ekranem startowym) -->
   <nav id="nav" class="nav hidden">
-    <button class="nav-btn" data-view="timeline" id="navTimeline">📆 Dzień po dniu</button>
     <button class="nav-btn" data-view="calendar" id="navCalendar">📅 Kalendarz</button>
+    <button class="nav-btn" data-view="timeline" id="navTimeline">📆 Dzień po dniu</button>
     <button class="nav-btn" data-view="attractions" id="navAttractions">🗺️ Atrakcje</button>
+    <button class="nav-btn" data-view="logistics" id="navLogistics">🧳 Podróż</button>
+    <!-- ZALOGOWANY UŻYTKOWNIK (klik = zmiana użytkownika) -->
+    <button id="userBadge" class="user-badge hidden"></button>
   </nav>
 
   <!-- WIDOK: OKŁADKA -->
@@ -24,7 +27,9 @@
     <div class="cover-content">
       <h1 id="tripTitle" class="cover-title"></h1>
       <p id="tripSubtitle" class="cover-subtitle"></p>
-      <button id="startBtn" class="btn-start">Zwiedzamy! 🎒</button>
+      <p class="login-label">Kto zwiedza?</p>
+      <div id="loginPanel" class="login-panel"></div>
+      <button id="startBtn" class="btn-start" disabled>Zwiedzamy! 🎒</button>
     </div>
   </section>
 
@@ -57,6 +62,11 @@
       </div>
     </div>
     <div id="attractionsList" class="attractions-list"></div>
+  </section>
+
+  <!-- WIDOK: PODRÓŻ (loty, pociągi, noclegi, auto, bilety) -->
+  <section id="view-logistics" class="view hidden">
+    <div id="logisticsList"></div>
   </section>
 
   <script src="js/data.js"></script>
