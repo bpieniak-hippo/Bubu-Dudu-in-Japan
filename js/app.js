@@ -1448,6 +1448,12 @@ function expenseFormHtml(dayKeys) {
         <label>Kategoria
           <select name="category">${EXPENSE_CATEGORIES.map((c) => `<option>${c}</option>`).join("")}</select>
         </label>
+        <label>Czym płacone
+          <select name="method">
+            <option value="card">💳 Karta</option>
+            <option value="cash">💵 Gotówka</option>
+          </select>
+        </label>
         <label>Dzień
           <select name="dateKey">
             ${dayKeys
@@ -1480,6 +1486,7 @@ function openExpenseForm() {
       currency: f.get("currency"),
       label: String(f.get("label")).slice(0, 60),
       category: f.get("category"),
+      method: f.get("method"),
       dateKey: f.get("dateKey"),
     });
     closeDetail();
@@ -1491,8 +1498,19 @@ function walletHtml() {
   const list = getExpenses();
   const { rate, known, fresh } = getFxRate();
   const spent = list.reduce((sum, e) => sum + expenseYen(e), 0);
-  const budget = fundsYen(getFunds());
+  const funds = getFunds();
+  const budget = fundsYen(funds);
   const left = budget - spent;
+
+  // Karta i gotówka to dwa osobne zapasy — po wydaniu ostatniego jena w kieszeni
+  // saldo na karcie w niczym nie pomoże przy automacie z biletami.
+  const spentCash = list
+    .filter((e) => e.method === "cash")
+    .reduce((s, e) => s + expenseYen(e), 0);
+  const byMethod = [
+    { icon: "💳", label: "Karta", yen: toYen(funds.card, funds.cardCur) - (spent - spentCash) },
+    { icon: "💵", label: "Gotówka", yen: toYen(funds.cash, funds.cashCur) - spentCash },
+  ];
 
   // Bez budżetu nie ma od czego odejmować — pokazujemy same wydatki i zachętę.
   const heroLabel = budget ? "Zostało" : "Wydane";
@@ -1514,6 +1532,20 @@ function walletHtml() {
         <p class="wallet-yen">${formatMoney(heroYen, "JPY")}</p>
         <p class="wallet-pln">${formatMoney(heroYen * rate, "PLN")}</p>
         <p class="wallet-rate">1 ¥ = ${rate.toFixed(4).replace(".", ",")} zł${rateNote}</p>
+        ${
+          budget
+            ? `<div class="wallet-split">${byMethod
+                .map(
+                  (m) => `
+                    <div class="wallet-split-item${m.yen < 0 ? " over" : ""}">
+                      <p class="wallet-split-label">${m.icon} ${m.label}</p>
+                      <p class="wallet-split-yen">${formatMoney(m.yen, "JPY")}</p>
+                    </div>
+                  `
+                )
+                .join("")}</div>`
+            : ""
+        }
       </div>
 
       ${
@@ -1552,7 +1584,9 @@ function walletHtml() {
                   <article class="wallet-row">
                     <div>
                       <p class="wallet-label">${escapeHtml(e.label)}</p>
-                      <p class="wallet-meta">${formatDayDate(e.dateKey)} · ${escapeHtml(e.category)}</p>
+                      <p class="wallet-meta">${e.method === "cash" ? "💵" : "💳"} ${formatDayDate(
+                        e.dateKey
+                      )} · ${escapeHtml(e.category)}</p>
                     </div>
                     <div class="wallet-amount">
                       <p>${formatMoney(e.amount, e.currency)}</p>

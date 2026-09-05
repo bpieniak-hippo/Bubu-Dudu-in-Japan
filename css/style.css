@@ -1144,6 +1144,22 @@ body.modal-open { overflow: hidden; }
 .wallet-total.over .wallet-yen,
 .wallet-total.over .wallet-pln { color: #c0392b; }
 
+.wallet-split {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #f4e6ea;
+}
+
+.wallet-split-item { flex: 1; }
+
+.wallet-split-label { margin: 0; font-size: 0.75rem; color: #999; }
+
+.wallet-split-yen { margin: 2px 0 0; font-size: 1.05rem; font-weight: 700; }
+
+.wallet-split-item.over .wallet-split-yen { color: #c0392b; }
+
 .wallet-progress { margin-bottom: 10px; }
 
 .wallet-hint {
