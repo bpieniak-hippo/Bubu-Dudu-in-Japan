@@ -1111,6 +1111,85 @@ body.modal-open { overflow: hidden; }
 
 .storage-fill { height: 100%; background: var(--pink-dark); }
 
+/* ---------- PORTFEL ---------- */
+.wallet-total {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.wallet-yen {
+  margin: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.wallet-pln { margin: 2px 0 0; font-size: 1.1rem; color: var(--pink-dark); }
+
+.wallet-rate { margin: 6px 0 0; font-size: 0.75rem; color: #999; }
+
+.wallet-add { width: 100%; margin-bottom: 10px; }
+
+.wallet-settle {
+  margin: 0 0 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: #dcefff;
+  font-size: 0.9rem;
+}
+
+.wallet-cats {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+}
+
+.wallet-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 6px;
+  box-shadow: var(--shadow);
+}
+
+.wallet-label { margin: 0; font-weight: 700; font-size: 0.95rem; }
+
+.wallet-meta { margin: 2px 0 0; font-size: 0.75rem; color: #999; }
+
+.wallet-amount {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wallet-amount p { margin: 0; }
+
+.wallet-del {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #bbb;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.wallet-del:hover { background: #fff0f5; color: var(--pink-dark); }
+
 /* ---------- MAPA ---------- */
 /* Kafelki są pozycjonowane względem środka ramki, więc CSS nie musi znać
    ich liczby ani rozmiaru kontenera. Brak touch-action: przewijanie listy

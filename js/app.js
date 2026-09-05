@@ -58,6 +58,8 @@ const STORE_KEYS = {
   session: "bubuDudu.session",
   custom: "bubuDudu.customAttractions",
   weather: "bubuDudu.weather",
+  expenses: "bubuDudu.expenses",
+  fx: "bubuDudu.fx",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -131,7 +133,7 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "visited", "comments", "custom"];
+const BACKUP_STORES = ["dates", "visited", "comments", "custom", "expenses"];
 
 function probeStorage() {
   try {
@@ -190,7 +192,7 @@ async function exportData() {
 // wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
 function mergeBackup(backup) {
   if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
-  const added = { comments: 0, visited: 0, custom: 0, dates: 0 };
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0, expenses: 0 };
   let conflicts = 0;
 
   const incoming = backup.data;
@@ -218,6 +220,13 @@ function mergeBackup(backup) {
     setStoreValue("custom", id, item);
   });
 
+  // Wydatki mają losowe id, więc suma po id nie zdubluje niczego dwa razy.
+  Object.entries(incoming.expenses || {}).forEach(([id, item]) => {
+    if (!item || loadStore("expenses")[id]) return;
+    added.expenses += 1;
+    setStoreValue("expenses", id, item);
+  });
+
   Object.entries(incoming.dates || {}).forEach(([id, date]) => {
     const mine = getUserDates()[id];
     if (mine === date) return;
@@ -237,6 +246,7 @@ function importSummaryHtml({ added, conflicts }) {
     added.dates && `${added.dates} dat`,
     added.visited && `${added.visited} odhaczonych atrakcji`,
     added.custom && `${added.custom} własnych atrakcji`,
+    added.expenses && `${added.expenses} wydatków`,
   ].filter(Boolean);
 
   return `
@@ -1240,12 +1250,14 @@ function renderLogisticsChips() {
   const container = document.getElementById("logisticsChips");
   // Przewinięcie paska ginie przy podmianie innerHTML — kliknięty chip uciekłby poza ekran.
   const scroll = container.scrollLeft;
+  const chip = (type, label) =>
+    `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
+
+  // Portfel jest osobnym panelem, nie sekcją EVENTS, więc "Wszystko" go nie obejmuje.
   container.innerHTML =
-    `<button class="chip${logisticsFilter === "all" ? " active" : ""}" data-type="all">Wszystko</button>` +
-    LOGISTICS_SECTIONS.map(
-      (s) =>
-        `<button class="chip${logisticsFilter === s.type ? " active" : ""}" data-type="${s.type}">${s.chip}</button>`
-    ).join("");
+    chip("all", "Wszystko") +
+    LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
+    chip("wallet", "💴 Portfel");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -1262,6 +1274,12 @@ function renderLogisticsChips() {
 
 function renderLogistics() {
   const container = document.getElementById("logisticsList");
+
+  if (walletOpen()) {
+    container.innerHTML = walletHtml();
+    return;
+  }
+
   const sections =
     logisticsFilter === "all"
       ? LOGISTICS_SECTIONS
@@ -1279,6 +1297,218 @@ function renderLogistics() {
       `;
     })
     .join("");
+}
+
+// ---------- Portfel ----------
+// Kurs orientacyjny na wypadek pierwszego uruchomienia bez sieci. Lepiej pokazać
+// przybliżoną złotówkę z adnotacją niż samo "12 500 ¥", które nic nie mówi.
+const FX_FALLBACK = 0.027;
+const FX_TTL_MS = 24 * 60 * 60 * 1000;
+
+const EXPENSE_CATEGORIES = ["Jedzenie", "Transport", "Wstępy", "Zakupy", "Nocleg", "Inne"];
+
+function getFxRate() {
+  const fx = loadStore("fx");
+  return {
+    rate: typeof fx.rate === "number" ? fx.rate : FX_FALLBACK,
+    fresh: typeof fx.rate === "number" && Date.now() - (fx.ts || 0) < FX_TTL_MS,
+    known: typeof fx.rate === "number",
+  };
+}
+
+// Frankfurter odpada — pod file:// (origin "null") oddaje 301 bez nagłówka CORS.
+async function fetchFxRate() {
+  const fx = loadStore("fx");
+  if (typeof fx.rate === "number" && Date.now() - (fx.ts || 0) < FX_TTL_MS) return;
+  try {
+    const res = await fetch("https://open.er-api.com/v6/latest/JPY");
+    const json = await res.json();
+    const rate = json && json.rates && json.rates.PLN;
+    if (typeof rate !== "number") return;
+    setStoreValue("fx", "rate", rate);
+    setStoreValue("fx", "ts", Date.now());
+    if (walletOpen()) renderLogistics();
+  } catch {
+    // Brak sieci — zostaje ostatni znany kurs albo FX_FALLBACK.
+  }
+}
+
+function getExpenses() {
+  return Object.entries(loadStore("expenses"))
+    .map(([id, e]) => ({ ...e, id }))
+    .sort((a, b) => b.ts - a.ts);
+}
+
+function expenseYen(e) {
+  return e.currency === "JPY" ? e.amount : e.amount / getFxRate().rate;
+}
+
+function formatMoney(value, currency) {
+  const rounded = currency === "JPY" ? Math.round(value) : Math.round(value * 100) / 100;
+  return `${rounded.toLocaleString("pl-PL")} ${currency === "JPY" ? "¥" : "zł"}`;
+}
+
+// Kto komu ile — najbardziej praktyczna liczba dla pary na wspólnym wyjeździe.
+// "Wspólne" dzielimy po połowie, wydatek jednej osoby to dług drugiej w połowie.
+function settleBalance(list) {
+  const [a, b] = USERS;
+  let owed = 0; // dodatnie = b jest winien a
+  list.forEach((e) => {
+    const yen = expenseYen(e);
+    if (e.payer === a.id) owed += yen / 2;
+    else if (e.payer === b.id) owed -= yen / 2;
+  });
+  if (Math.abs(owed) < 1) return null;
+  const [from, to] = owed > 0 ? [b, a] : [a, b];
+  return { from, to, yen: Math.abs(owed) };
+}
+
+function walletOpen() {
+  return logisticsFilter === "wallet";
+}
+
+function expenseFormHtml(dayKeys) {
+  const today = toLocalKey(new Date());
+  const preselect = dayKeys.includes(today) ? today : dayKeys[0];
+  return `
+    <div class="account-panel">
+      <h2 class="account-title">Nowy wydatek</h2>
+      <form class="add-form" id="expenseForm">
+        <label>Kwota
+          <input name="amount" type="number" inputmode="decimal" step="0.01" min="0" required />
+        </label>
+        <label>Waluta
+          <select name="currency"><option value="JPY">¥ jeny</option><option value="PLN">zł złote</option></select>
+        </label>
+        <label>Na co
+          <input name="label" type="text" maxlength="60" placeholder="np. omakase" required />
+        </label>
+        <label>Kategoria
+          <select name="category">${EXPENSE_CATEGORIES.map((c) => `<option>${c}</option>`).join("")}</select>
+        </label>
+        <label>Kto płacił
+          <select name="payer">
+            ${USERS.map((u) => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("")}
+            <option value="shared">Wspólne</option>
+          </select>
+        </label>
+        <label>Dzień
+          <select name="dateKey">
+            ${dayKeys
+              .map(
+                (k) =>
+                  `<option value="${k}"${k === preselect ? " selected" : ""}>${formatDayDate(k)}</option>`
+              )
+              .join("")}
+          </select>
+        </label>
+        <button class="btn-account" type="submit">Zapisz wydatek</button>
+      </form>
+    </div>
+  `;
+}
+
+function openExpenseForm() {
+  const dayKeys = tripDayKeys();
+  openModal(expenseFormHtml(dayKeys));
+
+  document.getElementById("expenseForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const amount = Number(f.get("amount"));
+    if (!amount) return;
+    const id = `x${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    setStoreValue("expenses", id, {
+      ts: Date.now(),
+      amount,
+      currency: f.get("currency"),
+      label: String(f.get("label")).slice(0, 60),
+      category: f.get("category"),
+      payer: f.get("payer"),
+      dateKey: f.get("dateKey"),
+    });
+    closeDetail();
+    renderLogistics();
+  });
+}
+
+function walletHtml() {
+  const list = getExpenses();
+  const { rate, known, fresh } = getFxRate();
+  const totalYen = list.reduce((sum, e) => sum + expenseYen(e), 0);
+
+  const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
+    cat,
+    yen: list.filter((e) => e.category === cat).reduce((s, e) => s + expenseYen(e), 0),
+  })).filter((c) => c.yen > 0);
+
+  const balance = settleBalance(list);
+
+  return `
+    <section class="trip-section">
+      <h2 class="trip-section-title">💴 Portfel<span class="trip-count">${list.length}</span></h2>
+
+      <div class="wallet-total">
+        <p class="wallet-yen">${formatMoney(totalYen, "JPY")}</p>
+        <p class="wallet-pln">${formatMoney(totalYen * rate, "PLN")}</p>
+        <p class="wallet-rate">
+          1 ¥ = ${rate.toFixed(4).replace(".", ",")} zł${known ? (fresh ? "" : " · kurs z pamięci") : " · kurs orientacyjny"}
+        </p>
+      </div>
+
+      <button class="btn-account wallet-add" type="button" data-wallet="add">+ Dodaj wydatek</button>
+
+      ${
+        balance
+          ? // Bez odmiany imion — "Paula jest winien Bartek" brzmi fatalnie,
+            // a odmiana przez przypadki w kodzie to proszenie się o kłopoty.
+            `<p class="wallet-settle">Do wyrównania: ${escapeHtml(balance.from.name)} → ${escapeHtml(
+              balance.to.name
+            )} <strong>${formatMoney(balance.yen, "JPY")}</strong> (${formatMoney(
+              balance.yen * rate,
+              "PLN"
+            )})</p>`
+          : list.length
+            ? `<p class="wallet-settle">Na czysto — nikt nikomu nic nie jest winien.</p>`
+            : ""
+      }
+
+      ${
+        byCategory.length
+          ? `<dl class="trip-rows wallet-cats">${byCategory
+              .map(
+                (c) =>
+                  `<dt>${c.cat}</dt><dd>${formatMoney(c.yen, "JPY")} · ${formatMoney(c.yen * rate, "PLN")}</dd>`
+              )
+              .join("")}</dl>`
+          : ""
+      }
+
+      ${
+        list.length
+          ? list
+              .map((e) => {
+                const payer = USERS.find((u) => u.id === e.payer);
+                return `
+                  <article class="wallet-row">
+                    <div>
+                      <p class="wallet-label">${escapeHtml(e.label)}</p>
+                      <p class="wallet-meta">${formatDayDate(e.dateKey)} · ${escapeHtml(e.category)} · ${
+                        payer ? escapeHtml(payer.name) : "wspólne"
+                      }</p>
+                    </div>
+                    <div class="wallet-amount">
+                      <p>${formatMoney(e.amount, e.currency)}</p>
+                      <button type="button" class="wallet-del" data-wallet="del" data-id="${e.id}" aria-label="Usuń wydatek">✕</button>
+                    </div>
+                  </article>
+                `;
+              })
+              .join("")
+          : `<p class="day-empty">Jeszcze nic nie wydaliście 🐾</p>`
+      }
+    </section>
+  `;
 }
 
 function renderMonth(year, month, eventsByDay) {
@@ -1941,6 +2171,15 @@ function init() {
       selectUser(swap.dataset.switch);
       closeDetail();
       refreshAttractions();
+      return;
+    }
+    const wallet = e.target.closest("[data-wallet]");
+    if (wallet) {
+      if (wallet.dataset.wallet === "add") openExpenseForm();
+      else if (confirm("Usunąć ten wydatek?")) {
+        setStoreValue("expenses", wallet.dataset.id, "");
+        renderLogistics();
+      }
     }
   });
 
@@ -1983,6 +2222,7 @@ function init() {
   renderAttractions();
   renderProgress();
   loadWeather();
+  fetchFxRate();
 }
 
 document.addEventListener("DOMContentLoaded", init);
