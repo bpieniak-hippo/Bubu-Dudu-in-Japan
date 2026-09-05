@@ -332,6 +332,17 @@ body {
 .event-icon { font-size: 1.4rem; }
 
 .event-title { font-weight: 700; margin: 0; }
+
+.event-time {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--blue);
+  color: #1c3b57;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
 .event-details { margin: 2px 0 0; font-size: 0.9rem; color: #6b5a5a; }
 .event-details a { color: var(--blue-dark); }
 
@@ -404,7 +415,14 @@ body {
   margin-top: 4px;
 }
 
-.attraction-card .date-picker {
+.plan-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.attraction-card .date-picker,
+.attraction-card .time-picker {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -413,13 +431,21 @@ body {
   color: var(--pink-dark);
 }
 
-.attraction-card .date-picker input {
+.attraction-card .date-picker input,
+.attraction-card .time-picker input {
   border: 1px solid #f0c0d0;
   border-radius: 8px;
   padding: 6px 8px;
   font-size: 16px;
   font-family: inherit;
   color: var(--text);
+}
+
+/* Godzina czeka na wybór dnia — wyszarzona, żeby było widać, że to nie awaria. */
+.attraction-card .time-picker input:disabled {
+  border-color: #eee;
+  background: #fafafa;
+  color: #bbb;
 }
 
 .attraction-card .visit-check {

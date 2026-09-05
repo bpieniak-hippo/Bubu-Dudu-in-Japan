@@ -53,6 +53,7 @@ function buildEventsByDay(events) {
 // Każdy store to obiekt { [id atrakcji]: wartość }.
 const STORE_KEYS = {
   dates: "bubuDudu.attractionDates",
+  times: "bubuDudu.attractionTimes",
   visited: "bubuDudu.attractionVisited",
   comments: "bubuDudu.attractionComments",
   session: "bubuDudu.session",
@@ -123,6 +124,14 @@ function setUserDate(id, date) {
   setStoreValue("dates", id, date);
 }
 
+function getUserTimes() {
+  return loadStore("times");
+}
+
+function setUserTime(id, time) {
+  setStoreValue("times", id, time);
+}
+
 function getVisited() {
   return loadStore("visited");
 }
@@ -134,7 +143,7 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "visited", "comments", "custom", "expenses", "funds"];
+const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds"];
 
 function probeStorage() {
   try {
@@ -193,7 +202,7 @@ async function exportData() {
 // wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
 function mergeBackup(backup) {
   if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
-  const added = { comments: 0, visited: 0, custom: 0, dates: 0, expenses: 0 };
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0 };
   let conflicts = 0;
 
   const incoming = backup.data;
@@ -243,6 +252,13 @@ function mergeBackup(backup) {
     }
   });
 
+  // Godzina bez daty nic nie znaczy, więc idzie tą samą zasadą: lokalna wygrywa.
+  Object.entries(incoming.times || {}).forEach(([id, time]) => {
+    if (!time || getUserTimes()[id]) return;
+    added.times += 1;
+    setUserTime(id, time);
+  });
+
   return { added, conflicts };
 }
 
@@ -250,6 +266,7 @@ function importSummaryHtml({ added, conflicts }) {
   const parts = [
     added.comments && `${added.comments} komentarzy`,
     added.dates && `${added.dates} dat`,
+    added.times && `${added.times} godzin`,
     added.visited && `${added.visited} odhaczonych atrakcji`,
     added.custom && `${added.custom} własnych atrakcji`,
     added.expenses && `${added.expenses} wydatków`,
@@ -401,18 +418,21 @@ function flattenAttractions() {
 // Buduje wydarzenia "zaplanowane przez użytkownika" na podstawie dat wybranych w Atrakcjach
 function buildPlannedEvents() {
   const userDates = getUserDates();
+  const userTimes = getUserTimes();
   const visited = getVisited();
   const flat = flattenAttractions();
   const planned = [];
   flat.forEach((item) => {
     const date = userDates[item.id];
     if (!date) return;
+    const time = userTimes[item.id] || "";
     planned.push({
       date,
+      time,
       type: "planned",
       icon: visited[item.id] ? "✅" : "📌",
       title: escapeHtml(item.name),
-      details: "Zaplanowane samodzielnie w zakładce Atrakcje",
+      details: time ? "Zaplanowane na tę godzinę" : "Zaplanowane samodzielnie w zakładce Atrakcje",
       link: item.link,
     });
   });
@@ -1109,7 +1129,7 @@ function eventCardHtml(ev) {
     <div class="event-card">
       <div class="event-icon">${ev.icon}</div>
       <div>
-        <p class="event-title">${ev.title}</p>
+        <p class="event-title">${ev.time ? `<span class="event-time">${ev.time}</span>` : ""}${ev.title}</p>
         <p class="event-details">${details}${
           link ? ` · <a href="${link}" target="_blank" rel="noopener">link</a>` : ""
         }</p>
@@ -1127,9 +1147,14 @@ function daySubtitle(dateKey) {
 
 // Wnętrze karty dnia — używane i w osi czasu, i w oknie dnia z kalendarza
 function dayCardHtml(dateKey, dayEvents) {
+  // W obrębie tego samego typu decyduje godzina; bez godziny wydarzenie idzie na koniec.
   const sorted = dayEvents
     .slice()
-    .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type]);
+    .sort(
+      (a, b) =>
+        TYPE_ORDER[a.type] - TYPE_ORDER[b.type] ||
+        (a.time || "99:99").localeCompare(b.time || "99:99")
+    );
   const context = sorted.filter(isContextEvent);
   const main = sorted.filter((ev) => !isContextEvent(ev));
   const { dow, dayNum, monShort } = dayLabel(dateKey);
@@ -2018,11 +2043,16 @@ function renderAttractions() {
         card.dataset.id = item.id;
         const meta = [item.date, item.note].filter(Boolean).join(" · ");
         const savedDate = getUserDates()[item.id] || "";
+        const savedTime = getUserTimes()[item.id] || "";
 
         // Zakres ograniczony do dni wyjazdu — poza nimi i tak nie ma nas w Japonii.
+        // Godzina bez daty nie ma sensu, więc pole czeka zablokowane, aż dzień będzie wybrany.
         const dateControl = item.date
           ? ""
-          : `<label class="date-picker">🗓️ <input type="date" data-id="${item.id}" value="${savedDate}" min="${TRIP.startDate}" max="${TRIP.endDate}" /></label>`;
+          : `<div class="plan-row">
+               <label class="date-picker">🗓️ <input type="date" data-id="${item.id}" value="${savedDate}" min="${TRIP.startDate}" max="${TRIP.endDate}" /></label>
+               <label class="time-picker">🕘 <input type="time" value="${savedTime}"${savedDate ? "" : " disabled"} /></label>
+             </div>`;
 
         card.innerHTML = `
           ${
@@ -2061,6 +2091,7 @@ function renderAttractions() {
         }
 
         const input = card.querySelector("input[type=date]");
+        const timeInput = card.querySelector("input[type=time]");
         if (input) {
           input.addEventListener("change", () => {
             // Datę spoza wyjazdu da się jeszcze wpisać z klawiatury — cofamy ją.
@@ -2069,6 +2100,18 @@ function renderAttractions() {
               return;
             }
             setUserDate(item.id, input.value);
+            // Skasowany dzień zabiera ze sobą godzinę — inaczej zostałaby sierota w store.
+            timeInput.disabled = !input.value;
+            if (!input.value) {
+              timeInput.value = "";
+              setUserTime(item.id, "");
+            }
+            renderCalendar();
+            renderTimeline();
+          });
+
+          timeInput.addEventListener("change", () => {
+            setUserTime(item.id, timeInput.value);
             renderCalendar();
             renderTimeline();
           });
