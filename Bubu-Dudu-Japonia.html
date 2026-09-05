@@ -1141,6 +1141,50 @@ body.modal-open { overflow: hidden; }
 
 .wallet-rate { margin: 6px 0 0; font-size: 0.75rem; color: #999; }
 
+.funds-box {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow);
+}
+
+.funds-title { margin: 0 0 10px; font-size: 0.8rem; color: #999; }
+
+.funds-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.funds-row > span { flex: 1; font-size: 0.9rem; }
+
+/* 16px, inaczej iOS Safari przybliża stronę przy wejściu w pole */
+.funds-row input,
+.funds-row select {
+  min-height: 44px;
+  border: 1px solid #f0c0d0;
+  border-radius: 12px;
+  padding: 0 10px;
+  font-size: 16px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+}
+
+.funds-row input { width: 100px; text-align: right; }
+
+.funds-row select { flex: none; }
+
+.funds-sum {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid #f4e6ea;
+  text-align: right;
+  font-size: 0.95rem;
+}
+
 .wallet-add { width: 100%; margin-bottom: 10px; }
 
 .wallet-settle {
@@ -2223,6 +2267,7 @@ const STORE_KEYS = {
   custom: "bubuDudu.customAttractions",
   weather: "bubuDudu.weather",
   expenses: "bubuDudu.expenses",
+  funds: "bubuDudu.funds",
   fx: "bubuDudu.fx",
 };
 
@@ -2297,7 +2342,7 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "visited", "comments", "custom", "expenses"];
+const BACKUP_STORES = ["dates", "visited", "comments", "custom", "expenses", "funds"];
 
 function probeStorage() {
   try {
@@ -2389,6 +2434,12 @@ function mergeBackup(backup) {
     if (!item || loadStore("expenses")[id]) return;
     added.expenses += 1;
     setStoreValue("expenses", id, item);
+  });
+
+  // Stan portfela jest kluczowany użytkownikiem — dociągamy tylko brakujące osoby.
+  Object.entries(incoming.funds || {}).forEach(([id, item]) => {
+    if (!item || loadStore("funds")[id]) return;
+    setStoreValue("funds", id, item);
   });
 
   Object.entries(incoming.dates || {}).forEach(([id, date]) => {
@@ -3441,6 +3492,7 @@ function renderLogistics() {
 
   if (walletOpen()) {
     container.innerHTML = walletHtml();
+    bindFunds(container);
     return;
   }
 
@@ -3503,8 +3555,80 @@ function getExpenses() {
     .sort((a, b) => b.ts - a.ts);
 }
 
+function toYen(amount, currency) {
+  return currency === "JPY" ? amount : amount / getFxRate().rate;
+}
+
 function expenseYen(e) {
-  return e.currency === "JPY" ? e.amount : e.amount / getFxRate().rate;
+  return toYen(e.amount, e.currency);
+}
+
+// Stan portfela jest osobisty ("ile ja mam"), więc kluczem jest użytkownik.
+function getFunds(userId) {
+  const saved = loadStore("funds")[userId] || {};
+  return {
+    card: Number(saved.card) || 0,
+    cardCur: saved.cardCur === "JPY" ? "JPY" : "PLN",
+    cash: Number(saved.cash) || 0,
+    cashCur: saved.cashCur === "PLN" ? "PLN" : "JPY",
+  };
+}
+
+function setFund(userId, field, value) {
+  setStoreValue("funds", userId, { ...getFunds(userId), [field]: value });
+}
+
+function fundsSumHtml(funds, rate) {
+  const yen = toYen(funds.card, funds.cardCur) + toYen(funds.cash, funds.cashCur);
+  return `Razem <strong>${formatMoney(yen, "JPY")}</strong> · ${formatMoney(yen * rate, "PLN")}`;
+}
+
+function fundsHtml() {
+  const user = getCurrentUser();
+  if (!user) return "";
+  const f = getFunds(user.id);
+  const { rate } = getFxRate();
+
+  const row = (field, icon, label) => `
+    <label class="funds-row">
+      <span>${icon} ${label}</span>
+      <input type="number" inputmode="decimal" step="0.01" min="0"
+             data-fund="${field}" value="${f[field] || ""}" placeholder="0" />
+      <select data-fund="${field}Cur">
+        <option value="JPY"${f[`${field}Cur`] === "JPY" ? " selected" : ""}>¥</option>
+        <option value="PLN"${f[`${field}Cur`] === "PLN" ? " selected" : ""}>zł</option>
+      </select>
+    </label>
+  `;
+
+  return `
+    <div class="funds-box" data-user="${user.id}">
+      <p class="funds-title">Ile mam — ${escapeHtml(user.name)}</p>
+      ${row("card", "💳", "Na karcie")}
+      ${row("cash", "💵", "Gotówka")}
+      <p class="funds-sum">${fundsSumHtml(f, rate)}</p>
+    </div>
+  `;
+}
+
+// Bez pełnego re-renderu — podmiana innerHTML zabrałaby fokus z pola w trakcie pisania.
+function bindFunds(container) {
+  const box = container.querySelector(".funds-box");
+  if (!box) return;
+  const userId = box.dataset.user;
+
+  box.addEventListener("input", (e) => {
+    const field = e.target.dataset.fund;
+    if (!field) return;
+    setFund(userId, field, e.target.tagName === "SELECT" ? e.target.value : Number(e.target.value) || 0);
+    box.querySelector(".funds-sum").innerHTML = fundsSumHtml(getFunds(userId), getFxRate().rate);
+  });
+
+  box.addEventListener("change", (e) => {
+    if (e.target.tagName !== "SELECT") return;
+    setFund(userId, e.target.dataset.fund, e.target.value);
+    box.querySelector(".funds-sum").innerHTML = fundsSumHtml(getFunds(userId), getFxRate().rate);
+  });
 }
 
 function formatMoney(value, currency) {
@@ -3619,6 +3743,8 @@ function walletHtml() {
           1 ¥ = ${rate.toFixed(4).replace(".", ",")} zł${known ? (fresh ? "" : " · kurs z pamięci") : " · kurs orientacyjny"}
         </p>
       </div>
+
+      ${fundsHtml()}
 
       <button class="btn-account wallet-add" type="button" data-wallet="add">+ Dodaj wydatek</button>
 
