@@ -1039,6 +1039,68 @@ body.modal-open { overflow: hidden; }
   transition: width 0.2s;
 }
 
+/* ---------- Ostrzeżenie o zapisie i panel konta ---------- */
+.storage-warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff3cd;
+  border: 1px solid #f0dca0;
+  color: #6b5a2a;
+  font-size: 0.82rem;
+}
+
+.warn-btn {
+  flex: none;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--pink-dark);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.account-panel { padding: 18px 18px 22px; }
+.account-title { margin: 0 0 12px; padding-right: 40px; font-size: 1.15rem; }
+.account-sub { margin: 20px 0 8px; font-size: 0.95rem; }
+.account-line { margin: 0 0 8px; font-size: 0.88rem; }
+.account-line.muted { color: #9a8a8a; font-size: 0.8rem; }
+.account-line.warn { color: #b06a1a; font-weight: 700; }
+
+.account-users { display: flex; gap: 10px; margin-bottom: 4px; }
+.account-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn-account {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--pink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-account:hover { background: #fff0f5; }
+
+.storage-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #f0e0e6;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.storage-fill { height: 100%; background: var(--pink-dark); }
+
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {
   .nav {

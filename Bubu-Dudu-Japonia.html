@@ -1048,6 +1048,68 @@ body.modal-open { overflow: hidden; }
   transition: width 0.2s;
 }
 
+/* ---------- Ostrzeżenie o zapisie i panel konta ---------- */
+.storage-warn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 16px 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff3cd;
+  border: 1px solid #f0dca0;
+  color: #6b5a2a;
+  font-size: 0.82rem;
+}
+
+.warn-btn {
+  flex: none;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 999px;
+  background: var(--pink-dark);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.account-panel { padding: 18px 18px 22px; }
+.account-title { margin: 0 0 12px; padding-right: 40px; font-size: 1.15rem; }
+.account-sub { margin: 20px 0 8px; font-size: 0.95rem; }
+.account-line { margin: 0 0 8px; font-size: 0.88rem; }
+.account-line.muted { color: #9a8a8a; font-size: 0.8rem; }
+.account-line.warn { color: #b06a1a; font-weight: 700; }
+
+.account-users { display: flex; gap: 10px; margin-bottom: 4px; }
+.account-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.btn-account {
+  flex: 1 1 auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid var(--pink);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-account:hover { background: #fff0f5; }
+
+.storage-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #f0e0e6;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.storage-fill { height: 100%; background: var(--pink-dark); }
+
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {
   .nav {
@@ -1090,6 +1152,9 @@ body.modal-open { overflow: hidden; }
     <!-- ZALOGOWANY UŻYTKOWNIK (klik = zmiana użytkownika) -->
     <button id="userBadge" class="user-badge hidden"></button>
   </nav>
+
+  <!-- OSTRZEŻENIE, GDY PRZEGLĄDARKA NIE ZAPISUJE DANYCH -->
+  <div id="storageWarn" class="storage-warn hidden"></div>
 
   <!-- WIDOK: OKŁADKA -->
   <section id="view-cover" class="view view-cover">
@@ -1956,6 +2021,27 @@ const STORE_KEYS = {
 // więc trzymamy też kopię w pamięci, żeby aplikacja działała w tej samej sesji.
 const memoryStore = {};
 
+// Dlaczego to jest ważne: pod file:// zapis nie działa, a dane żyją tylko do
+// zamknięcia karty. Bez sygnału użytkownik traci daty i komentarze bez ostrzeżenia.
+// "ok" | "blocked" (przeglądarka nie pozwala) | "full" (skończyło się miejsce)
+let storageState = "ok";
+
+function setStoreValue(name, id, value) {
+  const store = loadStore(name);
+  if (value) store[id] = value;
+  else delete store[id];
+  memoryStore[name] = store;
+  try {
+    localStorage.setItem(STORE_KEYS[name], JSON.stringify(store));
+  } catch (err) {
+    // Zdjęcia w base64 potrafią przepełnić limit ~5 MB. To inny problem
+    // niż zablokowany localStorage i wymaga innej rady dla użytkownika.
+    const full = err && /quota|exceeded/i.test(err.name + err.message);
+    storageState = full ? "full" : "blocked";
+    renderStorageWarning();
+  }
+}
+
 function loadStore(name) {
   if (memoryStore[name]) return memoryStore[name];
   try {
@@ -1965,16 +2051,22 @@ function loadStore(name) {
   }
 }
 
-function setStoreValue(name, id, value) {
-  const store = loadStore(name);
-  if (value) store[id] = value;
-  else delete store[id];
-  memoryStore[name] = store;
-  try {
-    localStorage.setItem(STORE_KEYS[name], JSON.stringify(store));
-  } catch {
-    // zostaje kopia w pamięci
-  }
+// Suma znaków we wszystkich kluczach ≈ zajęte bajty (localStorage liczy UTF-16,
+// ale limit też jest podawany w tej skali, więc proporcja się zgadza).
+function storageSize() {
+  return Object.keys(STORE_KEYS).reduce((sum, name) => {
+    try {
+      return sum + (localStorage.getItem(STORE_KEYS[name]) || "").length;
+    } catch {
+      return sum + JSON.stringify(memoryStore[name] || {}).length;
+    }
+  }, 0);
+}
+
+function formatBytes(n) {
+  return n >= 1024 * 1024
+    ? `${(n / 1024 / 1024).toFixed(1).replace(".", ",")} MB`
+    : `${Math.round(n / 1024)} kB`;
 }
 
 function getUserDates() {
@@ -1991,6 +2083,148 @@ function getVisited() {
 
 function setVisited(id, isVisited) {
   setStoreValue("visited", id, isVisited || "");
+}
+
+// ---------- Kopia zapasowa ----------
+// Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
+// a sesja jest osobista — oba pomijamy.
+const BACKUP_STORES = ["dates", "visited", "comments", "custom"];
+
+function probeStorage() {
+  try {
+    localStorage.setItem("__bubu_probe__", "1");
+    localStorage.removeItem("__bubu_probe__");
+  } catch {
+    storageState = "blocked";
+  }
+}
+
+function renderStorageWarning() {
+  const bar = document.getElementById("storageWarn");
+  if (!bar) return;
+  bar.classList.toggle("hidden", storageState === "ok");
+  if (storageState === "ok") return;
+  bar.innerHTML =
+    storageState === "full"
+      ? `<span>Pamięć pełna — zmiany mogą się nie zapisać. Zrób kopię i usuń zdjęcia z własnych atrakcji.</span>
+         <button type="button" class="warn-btn" data-backup="export">Pobierz kopię</button>`
+      : `<span>Ta kopia nie zapisuje zmian — pobierz kopię zapasową, zanim zamkniesz kartę.</span>
+         <button type="button" class="warn-btn" data-backup="export">Pobierz kopię</button>`;
+}
+
+function buildBackup() {
+  const data = {};
+  BACKUP_STORES.forEach((name) => (data[name] = loadStore(name)));
+  const user = getCurrentUser();
+  return { v: 1, exportedAt: new Date().toISOString(), user: user ? user.id : null, data };
+}
+
+async function exportData() {
+  const json = JSON.stringify(buildBackup(), null, 2);
+  const name = `bubu-dudu-kopia-${toLocalKey(new Date())}.json`;
+  const file = new File([json], name, { type: "application/json" });
+
+  // Na iPhonie arkusz udostępniania jest jedyną wygodną drogą do drugiego telefonu
+  // (AirDrop, WhatsApp), a <a download> bywa tam zawodne. Stąd ta kolejność.
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: "Kopia danych Bubu & Dudu" });
+      return;
+    } catch {
+      // anulowane albo niedostępne — schodzimy do pobrania pliku
+    }
+  }
+
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Scalanie jest bezstratne: nic z lokalnych danych nie znika, a przy sprzeczności
+// wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
+function mergeBackup(backup) {
+  if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0 };
+  let conflicts = 0;
+
+  const incoming = backup.data;
+
+  Object.entries(incoming.comments || {}).forEach(([id, list]) => {
+    if (!Array.isArray(list)) return;
+    const mine = loadStore("comments")[id] || [];
+    const seen = new Set(mine.map((c) => `${c.user}|${c.ts}`));
+    const merged = mine.concat(list.filter((c) => c && !seen.has(`${c.user}|${c.ts}`)));
+    if (merged.length === mine.length) return;
+    added.comments += merged.length - mine.length;
+    merged.sort((a, b) => a.ts - b.ts);
+    setStoreValue("comments", id, merged);
+  });
+
+  Object.entries(incoming.visited || {}).forEach(([id, value]) => {
+    if (!value || getVisited()[id]) return;
+    added.visited += 1;
+    setVisited(id, true);
+  });
+
+  Object.entries(incoming.custom || {}).forEach(([id, item]) => {
+    if (!item || getCustomAttractions()[id]) return;
+    added.custom += 1;
+    setStoreValue("custom", id, item);
+  });
+
+  Object.entries(incoming.dates || {}).forEach(([id, date]) => {
+    const mine = getUserDates()[id];
+    if (mine === date) return;
+    if (mine) conflicts += 1;
+    else {
+      added.dates += 1;
+      setUserDate(id, date);
+    }
+  });
+
+  return { added, conflicts };
+}
+
+function importSummaryHtml({ added, conflicts }) {
+  const parts = [
+    added.comments && `${added.comments} komentarzy`,
+    added.dates && `${added.dates} dat`,
+    added.visited && `${added.visited} odhaczonych atrakcji`,
+    added.custom && `${added.custom} własnych atrakcji`,
+  ].filter(Boolean);
+
+  return `
+    <div class="account-panel">
+      <h2 class="account-title">Kopia wczytana</h2>
+      <p class="account-line">${parts.length ? `Dodano: ${parts.join(", ")}.` : "Nie było nic nowego do dodania."}</p>
+      ${conflicts ? `<p class="account-line muted">Pominięto ${conflicts} sprzecznych dat — zostały Twoje.</p>` : ""}
+    </div>
+  `;
+}
+
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let summary;
+    try {
+      summary = mergeBackup(JSON.parse(reader.result));
+    } catch (err) {
+      openModal(`<div class="account-panel"><h2 class="account-title">Nie udało się wczytać</h2>
+        <p class="account-line">${escapeHtml(err.message)}</p></div>`);
+      return;
+    }
+    refreshAttractions();
+    renderTimeline();
+    renderCalendar();
+    openModal(importSummaryHtml(summary));
+  };
+  reader.onerror = () => {
+    openModal(`<div class="account-panel"><h2 class="account-title">Nie udało się odczytać pliku</h2></div>`);
+  };
+  reader.readAsText(file);
 }
 
 // ---------- Zalogowany użytkownik ----------
@@ -3192,6 +3426,55 @@ function selectUser(id) {
   renderUserBadge();
 }
 
+// Panel pod plakietką w nawigacji — jedyne miejsce na sprawy konta i danych,
+// bo pasek nawigacji nie ma już miejsca na kolejny przycisk.
+function openAccountPanel() {
+  const user = getCurrentUser();
+  const used = storageSize();
+  const limit = 5 * 1024 * 1024;
+  const pct = Math.min(100, Math.round((used / limit) * 100));
+
+  openModal(`
+    <div class="account-panel">
+      <h2 class="account-title">Konto i dane</h2>
+
+      <p class="account-line">Zalogowany: <strong>${escapeHtml(user ? user.name : "nikt")}</strong></p>
+      <div class="account-users">
+        ${USERS.map(
+          (u) => `<button type="button" class="login-user${user && user.id === u.id ? " active" : ""}"
+                    data-switch="${u.id}"><img src="${u.avatar}" alt="" /><span>${escapeHtml(u.name)}</span></button>`
+        ).join("")}
+      </div>
+
+      <h3 class="account-sub">Kopia zapasowa</h3>
+      <p class="account-line muted">
+        Plik z datami, komentarzami i własnymi atrakcjami. Wyślij go drugiej osobie,
+        żeby scalić plany — nic się przy tym nie nadpisze.
+      </p>
+      <div class="account-actions">
+        <button type="button" class="btn-account" data-backup="export">⬇️ Pobierz kopię</button>
+        <button type="button" class="btn-account" data-backup="import">⬆️ Wczytaj kopię</button>
+      </div>
+      <input type="file" id="backupFile" accept="application/json,.json" class="hidden" />
+
+      <h3 class="account-sub">Pamięć</h3>
+      <div class="storage-bar"><div class="storage-fill" style="width:${pct}%"></div></div>
+      <p class="account-line muted">${formatBytes(used)} z około 5 MB${
+        pct >= 80 ? " — zrób kopię, zanim zabraknie miejsca" : ""
+      }</p>
+      ${
+        storageState !== "ok"
+          ? `<p class="account-line warn">${
+              storageState === "full"
+                ? "Zapis nie działa: pamięć jest pełna."
+                : "Ta kopia nie zapisuje zmian na stałe — pobierz kopię przed zamknięciem karty."
+            }</p>`
+          : ""
+      }
+    </div>
+  `);
+}
+
 function renderLoginPanel() {
   const panel = document.getElementById("loginPanel");
   panel.innerHTML = USERS.map(
@@ -3245,12 +3528,27 @@ function init() {
     renderUserBadge();
   });
 
-  // Klik w plakietkę wraca na ekran startowy, żeby zmienić użytkownika.
-  document.getElementById("userBadge").addEventListener("click", () => {
-    document.body.classList.remove("app-started");
-    document.getElementById("nav").classList.add("hidden");
-    switchView("cover");
-    renderUserBadge();
+  document.getElementById("userBadge").addEventListener("click", openAccountPanel);
+
+  // Kopia zapasowa jest obsługiwana i z panelu konta, i z paska ostrzeżenia.
+  document.addEventListener("click", (e) => {
+    const action = e.target.closest("[data-backup]");
+    if (action) {
+      if (action.dataset.backup === "export") exportData();
+      else document.getElementById("backupFile").click();
+      return;
+    }
+    const swap = e.target.closest("[data-switch]");
+    if (swap) {
+      selectUser(swap.dataset.switch);
+      closeDetail();
+      refreshAttractions();
+    }
+  });
+
+  document.addEventListener("change", (e) => {
+    if (e.target.id !== "backupFile" || !e.target.files.length) return;
+    importData(e.target.files[0]);
   });
 
   document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -3276,6 +3574,8 @@ function init() {
     if (badge) openWeatherDetail(badge.dataset.weather);
   });
 
+  probeStorage();
+  renderStorageWarning();
   renderLoginPanel();
   renderFilterChips();
   renderLogisticsChips();
