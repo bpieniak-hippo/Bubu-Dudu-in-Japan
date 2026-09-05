@@ -1121,9 +1121,17 @@ body.modal-open { overflow: hidden; }
   text-align: center;
 }
 
+.wallet-hero-label {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #999;
+}
+
 .wallet-yen {
   margin: 0;
-  font-size: 1.7rem;
+  font-size: 2.1rem;
   font-weight: 700;
   color: var(--text);
 }
@@ -1132,15 +1140,38 @@ body.modal-open { overflow: hidden; }
 
 .wallet-rate { margin: 6px 0 0; font-size: 0.75rem; color: #999; }
 
-.funds-box {
-  background: #fff;
+/* Przekroczony budżet — czerwień, bo minus zapisany drobnym drukiem umknie. */
+.wallet-total.over .wallet-yen,
+.wallet-total.over .wallet-pln { color: #c0392b; }
+
+.wallet-progress { margin-bottom: 10px; }
+
+.wallet-hint {
+  margin: 0 0 10px;
+  padding: 12px 14px;
   border-radius: var(--radius);
-  padding: 14px;
-  margin-bottom: 10px;
-  box-shadow: var(--shadow);
+  background: #dcefff;
+  font-size: 0.85rem;
 }
 
-.funds-title { margin: 0 0 10px; font-size: 0.8rem; color: #999; }
+/* Budżet ustawia się raz — przycisk na końcu listy, żeby nie zabierał uwagi. */
+.wallet-budget {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px dashed #e6c8d4;
+  border-radius: var(--radius);
+  background: none;
+  color: #999;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.wallet-budget:hover { background: #fff; color: var(--text); }
+
+.funds-box { margin-bottom: 14px; }
 
 .funds-row {
   display: flex;
@@ -1177,14 +1208,6 @@ body.modal-open { overflow: hidden; }
 }
 
 .wallet-add { width: 100%; margin-bottom: 10px; }
-
-.wallet-settle {
-  margin: 0 0 10px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: #dcefff;
-  font-size: 0.9rem;
-}
 
 .wallet-cats {
   background: #fff;

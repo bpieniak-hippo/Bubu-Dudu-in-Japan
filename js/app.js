@@ -228,11 +228,10 @@ function mergeBackup(backup) {
     setStoreValue("expenses", id, item);
   });
 
-  // Stan portfela jest kluczowany użytkownikiem — dociągamy tylko brakujące osoby.
-  Object.entries(incoming.funds || {}).forEach(([id, item]) => {
-    if (!item || loadStore("funds")[id]) return;
-    setStoreValue("funds", id, item);
-  });
+  // Budżet jest jedną wspólną kwotą — przy sprzeczności zostaje lokalna, jak przy datach.
+  if (incoming.funds && incoming.funds.shared && !loadStore("funds").shared) {
+    setStoreValue("funds", "shared", incoming.funds.shared);
+  }
 
   Object.entries(incoming.dates || {}).forEach(([id, date]) => {
     const mine = getUserDates()[id];
@@ -1346,9 +1345,9 @@ function expenseYen(e) {
   return toYen(e.amount, e.currency);
 }
 
-// Stan portfela jest osobisty ("ile ja mam"), więc kluczem jest użytkownik.
-function getFunds(userId) {
-  const saved = loadStore("funds")[userId] || {};
+// Budżet jest wspólny — jeden zapis pod stałym kluczem, bez podziału na osoby.
+function getFunds() {
+  const saved = loadStore("funds").shared || {};
   return {
     card: Number(saved.card) || 0,
     cardCur: saved.cardCur === "JPY" ? "JPY" : "PLN",
@@ -1357,19 +1356,22 @@ function getFunds(userId) {
   };
 }
 
-function setFund(userId, field, value) {
-  setStoreValue("funds", userId, { ...getFunds(userId), [field]: value });
+function setFund(field, value) {
+  setStoreValue("funds", "shared", { ...getFunds(), [field]: value });
 }
 
-function fundsSumHtml(funds, rate) {
-  const yen = toYen(funds.card, funds.cardCur) + toYen(funds.cash, funds.cashCur);
+function fundsYen(f) {
+  return toYen(f.card, f.cardCur) + toYen(f.cash, f.cashCur);
+}
+
+function fundsSumHtml(f, rate) {
+  const yen = fundsYen(f);
   return `Razem <strong>${formatMoney(yen, "JPY")}</strong> · ${formatMoney(yen * rate, "PLN")}`;
 }
 
-function fundsHtml() {
-  const user = getCurrentUser();
-  if (!user) return "";
-  const f = getFunds(user.id);
+// Ustawianie budżetu schowane w oknie — na co dzień liczy się tylko "ile zostało".
+function openFundsForm() {
+  const f = getFunds();
   const { rate } = getFxRate();
 
   const row = (field, icon, label) => `
@@ -1384,33 +1386,37 @@ function fundsHtml() {
     </label>
   `;
 
-  return `
-    <div class="funds-box" data-user="${user.id}">
-      <p class="funds-title">Ile mam — ${escapeHtml(user.name)}</p>
-      ${row("card", "💳", "Na karcie")}
-      ${row("cash", "💵", "Gotówka")}
-      <p class="funds-sum">${fundsSumHtml(f, rate)}</p>
+  openModal(`
+    <div class="account-panel">
+      <h2 class="account-title">Wspólny budżet</h2>
+      <p class="account-line muted">Ile macie na wyjazd. Wydatki odejmują się od tej kwoty.</p>
+      <div class="funds-box">
+        ${row("card", "💳", "Na karcie")}
+        ${row("cash", "💵", "Gotówka")}
+        <p class="funds-sum">${fundsSumHtml(f, rate)}</p>
+      </div>
+      <button type="button" class="btn-account" data-wallet="close">Gotowe</button>
     </div>
-  `;
+  `);
+
+  bindFunds(document.getElementById("modalBody"));
 }
 
 // Bez pełnego re-renderu — podmiana innerHTML zabrałaby fokus z pola w trakcie pisania.
 function bindFunds(container) {
   const box = container.querySelector(".funds-box");
   if (!box) return;
-  const userId = box.dataset.user;
 
-  box.addEventListener("input", (e) => {
+  const update = (e) => {
     const field = e.target.dataset.fund;
     if (!field) return;
-    setFund(userId, field, e.target.tagName === "SELECT" ? e.target.value : Number(e.target.value) || 0);
-    box.querySelector(".funds-sum").innerHTML = fundsSumHtml(getFunds(userId), getFxRate().rate);
-  });
+    setFund(field, e.target.tagName === "SELECT" ? e.target.value : Number(e.target.value) || 0);
+    box.querySelector(".funds-sum").innerHTML = fundsSumHtml(getFunds(), getFxRate().rate);
+  };
 
+  box.addEventListener("input", update);
   box.addEventListener("change", (e) => {
-    if (e.target.tagName !== "SELECT") return;
-    setFund(userId, e.target.dataset.fund, e.target.value);
-    box.querySelector(".funds-sum").innerHTML = fundsSumHtml(getFunds(userId), getFxRate().rate);
+    if (e.target.tagName === "SELECT") update(e);
   });
 }
 
@@ -1419,25 +1425,8 @@ function formatMoney(value, currency) {
   return `${rounded.toLocaleString("pl-PL")} ${currency === "JPY" ? "¥" : "zł"}`;
 }
 
-// Kto komu ile — najbardziej praktyczna liczba dla pary na wspólnym wyjeździe.
-// "Wspólne" dzielimy po połowie, wydatek jednej osoby to dług drugiej w połowie.
-function settleBalance(list) {
-  const [a, b] = USERS;
-  let owed = 0; // dodatnie = b jest winien a
-  list.forEach((e) => {
-    const yen = expenseYen(e);
-    if (e.payer === a.id) owed += yen / 2;
-    else if (e.payer === b.id) owed -= yen / 2;
-  });
-  if (Math.abs(owed) < 1) return null;
-  const [from, to] = owed > 0 ? [b, a] : [a, b];
-  return { from, to, yen: Math.abs(owed) };
-}
-
 function renderWallet() {
-  const container = document.getElementById("walletPanel");
-  container.innerHTML = walletHtml();
-  bindFunds(container);
+  document.getElementById("walletPanel").innerHTML = walletHtml();
 }
 
 function expenseFormHtml(dayKeys) {
@@ -1458,12 +1447,6 @@ function expenseFormHtml(dayKeys) {
         </label>
         <label>Kategoria
           <select name="category">${EXPENSE_CATEGORIES.map((c) => `<option>${c}</option>`).join("")}</select>
-        </label>
-        <label>Kto płacił
-          <select name="payer">
-            ${USERS.map((u) => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("")}
-            <option value="shared">Wspólne</option>
-          </select>
         </label>
         <label>Dzień
           <select name="dateKey">
@@ -1497,7 +1480,6 @@ function openExpenseForm() {
       currency: f.get("currency"),
       label: String(f.get("label")).slice(0, 60),
       category: f.get("category"),
-      payer: f.get("payer"),
       dateKey: f.get("dateKey"),
     });
     closeDetail();
@@ -1508,45 +1490,48 @@ function openExpenseForm() {
 function walletHtml() {
   const list = getExpenses();
   const { rate, known, fresh } = getFxRate();
-  const totalYen = list.reduce((sum, e) => sum + expenseYen(e), 0);
+  const spent = list.reduce((sum, e) => sum + expenseYen(e), 0);
+  const budget = fundsYen(getFunds());
+  const left = budget - spent;
+
+  // Bez budżetu nie ma od czego odejmować — pokazujemy same wydatki i zachętę.
+  const heroLabel = budget ? "Zostało" : "Wydane";
+  const heroYen = budget ? left : spent;
 
   const byCategory = EXPENSE_CATEGORIES.map((cat) => ({
     cat,
     yen: list.filter((e) => e.category === cat).reduce((s, e) => s + expenseYen(e), 0),
-  })).filter((c) => c.yen > 0);
+  }))
+    .filter((c) => c.yen > 0)
+    .sort((a, b) => b.yen - a.yen);
 
-  const balance = settleBalance(list);
+  const rateNote = known ? (fresh ? "" : " · kurs z pamięci") : " · kurs orientacyjny";
 
   return `
     <section class="trip-section">
-      <h2 class="trip-section-title">Wydatki<span class="trip-count">${list.length}</span></h2>
-
-      <div class="wallet-total">
-        <p class="wallet-yen">${formatMoney(totalYen, "JPY")}</p>
-        <p class="wallet-pln">${formatMoney(totalYen * rate, "PLN")}</p>
-        <p class="wallet-rate">
-          1 ¥ = ${rate.toFixed(4).replace(".", ",")} zł${known ? (fresh ? "" : " · kurs z pamięci") : " · kurs orientacyjny"}
-        </p>
+      <div class="wallet-total${budget && left < 0 ? " over" : ""}">
+        <p class="wallet-hero-label">${heroLabel}</p>
+        <p class="wallet-yen">${formatMoney(heroYen, "JPY")}</p>
+        <p class="wallet-pln">${formatMoney(heroYen * rate, "PLN")}</p>
+        <p class="wallet-rate">1 ¥ = ${rate.toFixed(4).replace(".", ",")} zł${rateNote}</p>
       </div>
 
-      ${fundsHtml()}
+      ${
+        budget
+          ? `
+            <div class="progress wallet-progress">
+              <p class="progress-label">Wydane ${formatMoney(spent, "JPY")} z ${formatMoney(budget, "JPY")}</p>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width:${Math.min(100, Math.round((spent / budget) * 100))}%"></div>
+              </div>
+            </div>
+          `
+          : `<p class="wallet-hint">Nie macie jeszcze ustawionego budżetu — dodaj go niżej, żeby widzieć, ile zostało.</p>`
+      }
 
       <button class="btn-account wallet-add" type="button" data-wallet="add">+ Dodaj wydatek</button>
 
-      ${
-        balance
-          ? // Bez odmiany imion — "Paula jest winien Bartek" brzmi fatalnie,
-            // a odmiana przez przypadki w kodzie to proszenie się o kłopoty.
-            `<p class="wallet-settle">Do wyrównania: ${escapeHtml(balance.from.name)} → ${escapeHtml(
-              balance.to.name
-            )} <strong>${formatMoney(balance.yen, "JPY")}</strong> (${formatMoney(
-              balance.yen * rate,
-              "PLN"
-            )})</p>`
-          : list.length
-            ? `<p class="wallet-settle">Na czysto — nikt nikomu nic nie jest winien.</p>`
-            : ""
-      }
+      <h2 class="trip-section-title">Na co poszło<span class="trip-count">${list.length}</span></h2>
 
       ${
         byCategory.length
@@ -1562,26 +1547,25 @@ function walletHtml() {
       ${
         list.length
           ? list
-              .map((e) => {
-                const payer = USERS.find((u) => u.id === e.payer);
-                return `
+              .map(
+                (e) => `
                   <article class="wallet-row">
                     <div>
                       <p class="wallet-label">${escapeHtml(e.label)}</p>
-                      <p class="wallet-meta">${formatDayDate(e.dateKey)} · ${escapeHtml(e.category)} · ${
-                        payer ? escapeHtml(payer.name) : "wspólne"
-                      }</p>
+                      <p class="wallet-meta">${formatDayDate(e.dateKey)} · ${escapeHtml(e.category)}</p>
                     </div>
                     <div class="wallet-amount">
                       <p>${formatMoney(e.amount, e.currency)}</p>
                       <button type="button" class="wallet-del" data-wallet="del" data-id="${e.id}" aria-label="Usuń wydatek">✕</button>
                     </div>
                   </article>
-                `;
-              })
+                `
+              )
               .join("")
           : `<p class="day-empty">Jeszcze nic nie wydaliście 🐾</p>`
       }
+
+      <button class="wallet-budget" type="button" data-wallet="funds">⚙️ Wspólny budżet: ${formatMoney(budget, "JPY")}</button>
     </section>
   `;
 }
@@ -2246,14 +2230,17 @@ function init() {
       selectUser(swap.dataset.switch);
       closeDetail();
       refreshAttractions();
-      // Stan portfela jest osobisty — po zmianie osoby pokazujemy jej kwoty.
-      renderWallet();
       return;
     }
     const wallet = e.target.closest("[data-wallet]");
     if (wallet) {
-      if (wallet.dataset.wallet === "add") openExpenseForm();
-      else if (confirm("Usunąć ten wydatek?")) {
+      const what = wallet.dataset.wallet;
+      if (what === "add") openExpenseForm();
+      else if (what === "funds") openFundsForm();
+      else if (what === "close") {
+        closeDetail();
+        renderWallet();
+      } else if (confirm("Usunąć ten wydatek?")) {
         setStoreValue("expenses", wallet.dataset.id, "");
         renderWallet();
       }
