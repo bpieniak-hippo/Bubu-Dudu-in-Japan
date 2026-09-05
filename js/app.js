@@ -260,6 +260,12 @@ function weatherLook(code) {
   return { icon: "⛈️", label: "Burza" };
 }
 
+// Suma opadów po polsku. Poniżej 0,1 mm to zero — API zwraca tam szum rzędu 0,04 mm.
+function formatMm(mm) {
+  if (mm == null || mm < 0.1) return null;
+  return `${mm >= 10 ? Math.round(mm) : mm.toFixed(1).replace(".", ",")} mm`;
+}
+
 // Hotel danego dnia — to jego współrzędne wyznaczają pogodę.
 // W dniu przeprowadzki liczy się nowy hotel, bo z poprzedniego wymeldowujemy się rano.
 function dayHotel(dateKey) {
@@ -283,8 +289,8 @@ async function fetchJson(url) {
 async function fetchForecast(spot) {
   const res = await fetchJson(
     `https://api.open-meteo.com/v1/forecast?latitude=${spot.lat}&longitude=${spot.lon}` +
-      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max` +
-      `&hourly=temperature_2m,precipitation_probability,wind_speed_10m,weather_code` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum` +
+      `&hourly=temperature_2m,precipitation_probability,precipitation,wind_speed_10m,weather_code` +
       `&timezone=Asia%2FTokyo&forecast_days=16`
   );
 
@@ -297,6 +303,7 @@ async function fetchForecast(spot) {
       hour: time.slice(0, 5),
       temp: Math.round(res.hourly.temperature_2m[i]),
       rain: res.hourly.precipitation_probability[i],
+      mm: res.hourly.precipitation[i],
       wind: Math.round(res.hourly.wind_speed_10m[i]),
       code: res.hourly.weather_code[i],
     });
@@ -312,6 +319,7 @@ async function fetchForecast(spot) {
       max: Math.round(daily.temperature_2m_max[i]),
       min: Math.round(daily.temperature_2m_min[i]),
       rain: daily.precipitation_probability_max[i],
+      mm: daily.precipitation_sum[i],
       hours: hoursByDay[key] || [],
       kind: "forecast",
     };
@@ -324,7 +332,7 @@ async function fetchNormals(spot, days) {
   const tripYear = Number(TRIP.startDate.slice(0, 4));
   const from = days[0].slice(5);
   const to = days[days.length - 1].slice(5);
-  const acc = {}; // "MM-DD" -> { max: [], min: [], codes: [] }
+  const acc = {}; // "MM-DD" -> { max: [], min: [], codes: [], mm: [] }
 
   const years = Array.from({ length: WEATHER_YEARS_BACK }, (_, i) => tripYear - 1 - i);
   await Promise.all(
@@ -332,22 +340,24 @@ async function fetchNormals(spot, days) {
       const daily = (
         await fetchJson(
           `https://archive-api.open-meteo.com/v1/archive?latitude=${spot.lat}&longitude=${spot.lon}` +
-            `&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia%2FTokyo` +
+            `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Asia%2FTokyo` +
             `&start_date=${year}-${from}&end_date=${year}-${to}`
         )
       ).daily;
 
       daily.time.forEach((date, i) => {
         const md = date.slice(5);
-        const bucket = (acc[md] = acc[md] || { max: [], min: [], codes: [] });
+        const bucket = (acc[md] = acc[md] || { max: [], min: [], codes: [], mm: [] });
         if (daily.temperature_2m_max[i] != null) bucket.max.push(daily.temperature_2m_max[i]);
         if (daily.temperature_2m_min[i] != null) bucket.min.push(daily.temperature_2m_min[i]);
         if (daily.weather_code[i] != null) bucket.codes.push(daily.weather_code[i]);
+        if (daily.precipitation_sum[i] != null) bucket.mm.push(daily.precipitation_sum[i]);
       });
     })
   );
 
-  const avg = (nums) => Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
+  const mean = (nums) => nums.reduce((a, b) => a + b, 0) / nums.length;
+  const avg = (nums) => Math.round(mean(nums));
   const mostCommon = (nums) =>
     nums.sort(
       (a, b) => nums.filter((n) => n === b).length - nums.filter((n) => n === a).length
@@ -361,6 +371,7 @@ async function fetchNormals(spot, days) {
       code: mostCommon(bucket.codes),
       max: avg(bucket.max),
       min: avg(bucket.min),
+      mm: bucket.mm.length ? mean(bucket.mm) : null,
       kind: "normal",
     };
   });
@@ -420,15 +431,18 @@ function weatherBadgeHtml(dateKey) {
   if (!w) return "";
   const look = weatherLook(w.code);
   const isNormal = w.kind === "normal";
+  const mm = formatMm(w.mm);
+  const rainText = [w.rain != null ? `${w.rain}%` : null, mm].filter(Boolean).join(" · ");
   const title = isNormal
-    ? `${look.label} · typowa pogoda dla tej daty (średnia z ${WEATHER_YEARS_BACK} ostatnich lat)`
-    : `${look.label} · prognoza${w.rain != null ? ` · szansa opadów ${w.rain}%` : ""}`;
+    ? `${look.label} · typowa pogoda dla tej daty (średnia z ${WEATHER_YEARS_BACK} ostatnich lat)` +
+      (mm ? ` · opady ${mm}` : "")
+    : `${look.label} · prognoza${rainText ? ` · opady ${rainText}` : ""}`;
 
   return `
     <button type="button" class="day-weather${isNormal ? " is-normal" : ""}" data-weather="${dateKey}" title="${escapeHtml(title)}">
       <span class="wx-icon">${look.icon}</span>
       <span class="wx-temp">${isNormal ? "~" : ""}${w.max}°<span class="wx-min">/${w.min}°</span></span>
-      ${!isNormal && w.rain != null ? `<span class="wx-rain">💧 ${w.rain}%</span>` : ""}
+      ${rainText ? `<span class="wx-rain">💧 ${rainText}</span>` : ""}
     </button>
   `;
 }
@@ -453,7 +467,9 @@ function openWeatherDetail(dateKey) {
              <span class="wx-h">${h.hour}</span>
              <span>${weatherLook(h.code).icon}</span>
              <span class="wx-h-temp">${h.temp}°</span>
-             <span class="wx-h-rain${h.rain >= 40 ? " is-wet" : ""}">${h.rain != null ? `${h.rain}%` : "–"}</span>
+             <span class="wx-h-rain${h.rain >= 40 ? " is-wet" : ""}">${h.rain != null ? `${h.rain}%` : "–"}${
+               formatMm(h.mm) ? `<span class="wx-h-mm">${formatMm(h.mm)}</span>` : ""
+             }</span>
              <span class="wx-h-wind">${h.wind} km/h</span>
            </div>`
            )
@@ -477,6 +493,7 @@ function openWeatherDetail(dateKey) {
       <p class="wx-detail-summary">
         ${look.label} · ${w.kind === "normal" ? "~" : ""}${w.max}° / ${w.min}°
         ${w.rain != null ? ` · szansa opadów do ${w.rain}%` : ""}
+        ${formatMm(w.mm) ? ` · suma opadów ${w.kind === "normal" ? "~" : ""}${formatMm(w.mm)}` : ""}
       </p>
       ${body}
     </div>

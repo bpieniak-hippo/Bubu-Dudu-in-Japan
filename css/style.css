@@ -744,7 +744,7 @@ body.modal-open { overflow: hidden; }
 .wx-icon { font-size: 1.25rem; display: block; }
 .wx-temp { font-size: 0.85rem; font-weight: 700; color: #6b5a5a; }
 .wx-min { font-weight: 400; color: #b0a0a0; }
-.wx-rain { display: block; font-size: 0.68rem; color: var(--blue-dark); }
+.wx-rain { display: block; font-size: 0.68rem; color: var(--blue-dark); white-space: nowrap; }
 
 /* Dni poza zasięgiem prognozy — średnia z poprzednich lat, więc mniej pewna */
 .day-weather.is-normal { opacity: 0.7; }
@@ -775,7 +775,7 @@ body.modal-open { overflow: hidden; }
 
 .wx-row {
   display: grid;
-  grid-template-columns: 46px 26px 1fr 1fr 1fr;
+  grid-template-columns: 44px 24px 0.8fr 1.5fr 1fr;
   align-items: center;
   gap: 6px;
   padding: 6px 0;
@@ -796,6 +796,15 @@ body.modal-open { overflow: hidden; }
 .wx-h-temp { font-weight: 700; }
 .wx-h-rain { color: #9a8a8a; }
 .wx-h-rain.is-wet { color: var(--blue-dark); font-weight: 700; }
+
+/* Suma opadów obok szansy — mniejsza, żeby procent pozostał główną liczbą */
+.wx-h-mm {
+  margin-left: 5px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--blue-dark);
+  white-space: nowrap;
+}
 .wx-h-wind { color: #9a8a8a; }
 
 .wx-note {
