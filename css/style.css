@@ -631,6 +631,16 @@ body.modal-open { overflow: hidden; }
   gap: 8px;
 }
 
+.add-btn.ghost {
+  background: #fff;
+  color: var(--text);
+  padding: 0 12px;
+  font-size: 1.1rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.add-btn.ghost.active { background: var(--pink-dark); }
+
 .add-form {
   display: flex;
   flex-direction: column;
@@ -1100,6 +1110,122 @@ body.modal-open { overflow: hidden; }
 }
 
 .storage-fill { height: 100%; background: var(--pink-dark); }
+
+/* ---------- MAPA ---------- */
+/* Kafelki są pozycjonowane względem środka ramki, więc CSS nie musi znać
+   ich liczby ani rozmiaru kontenera. Brak touch-action: przewijanie listy
+   palcem po mapie ma działać normalnie. */
+.map-mini {
+  position: relative;
+  height: 110px;
+  margin: 10px 0 2px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: var(--cream);
+  border: 1px solid #f0dce4;
+}
+
+.map-tile {
+  position: absolute;
+  width: 256px;
+  height: 256px;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.map-pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--pink-dark);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.map-pin.solo { left: 50%; top: 50%; }
+
+.map-pin.is-hotel { background: var(--blue-dark); }
+
+/* Pinezki na dużej mapie są klikalne, więc muszą być przyciskami z rozsądnym
+   polem trafienia — 14 px kropka z przezroczystą obwódką na palec. */
+.map-view .map-pin {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.map-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.map-cities { flex: 1; min-width: 0; }
+
+.map-scope { flex: none; }
+
+.map-viewport {
+  position: relative;
+  height: min(60vh, 460px);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--cream);
+  box-shadow: var(--shadow);
+  touch-action: none;
+  cursor: grab;
+}
+
+.map-layer {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.map-zoom {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 2;
+}
+
+.map-zoom button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font-size: 1.2rem;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.map-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.map-attrib {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 1px 5px;
+  font-size: 0.6rem;
+  color: #5a4a4a;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 6px 0 0 0;
+}
 
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {

@@ -407,6 +407,362 @@ function mapsUrl(query) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
+// ---------- Mapy (kafelki OpenStreetMap, bez bibliotek) ----------
+const TILE = 256;
+const MAP_MIN_ZOOM = 8;
+const MAP_MAX_ZOOM = 17;
+const MINI_ZOOM = 14;
+
+function tileUrl(z, x, y) {
+  return `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
+}
+
+// Web Mercator: współrzędne → piksele w globalnej siatce dla danego zoomu.
+function mercProject(lat, lon, z) {
+  const n = TILE * 2 ** z;
+  const s = Math.sin((lat * Math.PI) / 180);
+  return {
+    x: ((lon + 180) / 360) * n,
+    y: (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n,
+  };
+}
+
+function mercUnproject(x, y, z) {
+  const n = TILE * 2 ** z;
+  return {
+    lon: (x / n) * 360 - 180,
+    lat: (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI,
+  };
+}
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const rad = (d) => (d * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLon = rad(b.lon - a.lon);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Największy zoom, przy którym wszystkie punkty mieszczą się w ramce.
+function fitView(points, width, height) {
+  const lats = points.map((p) => p.lat);
+  const lons = points.map((p) => p.lon);
+  const center = {
+    lat: (Math.min(...lats) + Math.max(...lats)) / 2,
+    lon: (Math.min(...lons) + Math.max(...lons)) / 2,
+  };
+  if (points.length < 2) return { ...center, z: MINI_ZOOM };
+
+  for (let z = MAP_MAX_ZOOM; z > MAP_MIN_ZOOM; z--) {
+    const a = mercProject(Math.max(...lats), Math.min(...lons), z);
+    const b = mercProject(Math.min(...lats), Math.max(...lons), z);
+    // Margines 48 px, żeby pinezki przy krawędzi nie były ucięte.
+    if (b.x - a.x <= width - 48 && b.y - a.y <= height - 48) return { ...center, z };
+  }
+  return { ...center, z: MAP_MIN_ZOOM };
+}
+
+// Kafelki potrzebne, żeby pokryć ramkę w×h wyśrodkowaną na punkcie.
+// Pozycje są liczone względem środka ramki, więc HTML nie musi znać jej szerokości.
+function tileGrid(lat, lon, z, w, h) {
+  const p = mercProject(lat, lon, z);
+  const tx = Math.floor(p.x / TILE);
+  const ty = Math.floor(p.y / TILE);
+  const ox = p.x - tx * TILE;
+  const oy = p.y - ty * TILE;
+  const n = 2 ** z;
+  const out = [];
+
+  for (let i = Math.floor((ox - w / 2) / TILE); i <= Math.floor((ox + w / 2) / TILE); i++) {
+    for (let j = Math.floor((oy - h / 2) / TILE); j <= Math.floor((oy + h / 2) / TILE); j++) {
+      const y = ty + j;
+      // Poza biegunami kafelków nie ma — OSM oddałby 404 i migoczący placeholder.
+      if (y < 0 || y >= n) continue;
+      out.push({
+        z,
+        x: ((tx + i) % n + n) % n,
+        y,
+        left: i * TILE - ox,
+        top: j * TILE - oy,
+      });
+    }
+  }
+  return out;
+}
+
+// Nieinteraktywny podgląd na karcie i w oknie szczegółów. Sam kontener —
+// kafelki dokłada mountMiniMaps, bo dopiero po wstawieniu w DOM znamy szerokość.
+function miniMapHtml(item) {
+  if (item.lat == null || item.lon == null) return "";
+  return `
+    <div class="map-mini" data-lat="${item.lat}" data-lon="${item.lon}">
+      <span class="map-pin solo"></span>
+      <span class="map-attrib">© OpenStreetMap</span>
+    </div>
+  `;
+}
+
+function fillMiniMap(el) {
+  const w = el.clientWidth;
+  if (!w || el.dataset.ready) return;
+  el.dataset.ready = "1";
+
+  tileGrid(Number(el.dataset.lat), Number(el.dataset.lon), MINI_ZOOM, w, el.clientHeight).forEach(
+    (t) => {
+      const img = document.createElement("img");
+      img.className = "map-tile";
+      img.loading = "lazy";
+      img.alt = "";
+      img.src = tileUrl(t.z, t.x, t.y);
+      img.style.left = `calc(50% + ${t.left}px)`;
+      img.style.top = `calc(50% + ${t.top}px)`;
+      // Offline kafelek zostawia po sobie ikonę błędu — lepiej pokazać samo tło.
+      img.addEventListener("error", () => img.remove());
+      el.prepend(img);
+    }
+  );
+}
+
+// Kafelki dociągamy dopiero, gdy podgląd zbliża się do ekranu. Bez tego wejście
+// w Atrakcje to ~75 żądań naraz, a regulamin OpenStreetMap prosi o umiar.
+// Ten sam warunek załatwia ukryty widok — tam wysokość ramki wynosi 0.
+function mountMiniMaps() {
+  const margin = 150;
+  document.querySelectorAll(".map-mini:not([data-ready])").forEach((el) => {
+    const r = el.getBoundingClientRect();
+    if (!r.height) return;
+    if (r.bottom < -margin || r.top > window.innerHeight + margin) return;
+    fillMiniMap(el);
+  });
+}
+
+// ---------- Mapa miasta ----------
+// Promień, w jakim mieszczą się atrakcje "przy hotelu". Tokio rozciąga się od
+// Kamakury po Minakami (~150 km) — pełny kadr zszedłby do zoomu 8 i byłby
+// nieczytelny, dlatego domyślny widok trzyma się okolicy noclegu.
+const MAP_NEAR_KM = 15;
+
+const mapState = { open: false, city: null, scope: "near", lat: 0, lon: 0, z: 13 };
+
+function mapCities() {
+  const cities = getAttractionBlocks().map((b) => b.city);
+  EVENTS.forEach((e) => {
+    if (e.type === "hotel" && e.lat != null && !cities.includes(e.city)) cities.push(e.city);
+  });
+  return cities;
+}
+
+// Atrakcje respektują aktywne filtry i szukajkę — mapa pokazuje to samo, co lista.
+function mapPoints(city) {
+  const points = [];
+
+  getAttractionBlocks().forEach((block) => {
+    if (block.city !== city) return;
+    block.groups.forEach((group) => {
+      group.items.forEach((item) => {
+        if (item.lat == null || item.lon == null) return;
+        if (!matchesFilters(item, block.city, group.category)) return;
+        points.push({
+          lat: item.lat,
+          lon: item.lon,
+          label: item.name,
+          kind: "attraction",
+          item,
+          city: block.city,
+          category: group.category,
+        });
+      });
+    });
+  });
+
+  EVENTS.forEach((e) => {
+    if (e.type !== "hotel" || e.city !== city || e.lat == null) return;
+    points.push({ lat: e.lat, lon: e.lon, label: e.title, kind: "hotel", event: e });
+  });
+
+  return points;
+}
+
+function mapHome(points) {
+  return points.find((p) => p.kind === "hotel") || points[0];
+}
+
+function recenterMap(points, width, height) {
+  const home = mapHome(points);
+  if (!home) return;
+  const scoped =
+    mapState.scope === "near" ? points.filter((p) => haversineKm(home, p) <= MAP_NEAR_KM) : points;
+  const view = fitView(scoped.length ? scoped : [home], width, height);
+  mapState.lat = mapState.scope === "near" ? home.lat : view.lat;
+  mapState.lon = mapState.scope === "near" ? home.lon : view.lon;
+  mapState.z = view.z;
+}
+
+function syncMapLayer(layer, points) {
+  const w = layer.clientWidth;
+  const h = layer.clientHeight;
+  if (!w || !h) return;
+
+  layer.textContent = "";
+  layer.style.transform = "";
+
+  tileGrid(mapState.lat, mapState.lon, mapState.z, w, h).forEach((t) => {
+    const img = document.createElement("img");
+    img.className = "map-tile";
+    img.alt = "";
+    img.src = tileUrl(t.z, t.x, t.y);
+    img.style.left = `calc(50% + ${t.left}px)`;
+    img.style.top = `calc(50% + ${t.top}px)`;
+    img.addEventListener("error", () => img.remove());
+    layer.appendChild(img);
+  });
+
+  const c = mercProject(mapState.lat, mapState.lon, mapState.z);
+  points.forEach((p, i) => {
+    const xy = mercProject(p.lat, p.lon, mapState.z);
+    const dx = xy.x - c.x;
+    const dy = xy.y - c.y;
+    // Punkty poza kadrem zostawiamy w DOM tylko wtedy, gdy są blisko krawędzi —
+    // przy pełnym regionie inaczej rozjeżdża się warstwa o tysiące pikseli.
+    if (Math.abs(dx) > w || Math.abs(dy) > h) return;
+    const pin = document.createElement("button");
+    pin.type = "button";
+    pin.className = "map-pin" + (p.kind === "hotel" ? " is-hotel" : "");
+    pin.dataset.index = String(i);
+    pin.title = p.label;
+    pin.setAttribute("aria-label", p.label);
+    pin.style.left = `calc(50% + ${dx}px)`;
+    pin.style.top = `calc(50% + ${dy}px)`;
+    layer.appendChild(pin);
+  });
+}
+
+function openMapPoint(p) {
+  if (p.kind === "hotel") openModal(`<div class="modal-content">${logisticsCardHtml(p.event)}</div>`);
+  else openDetail(p.item, p.city, p.category);
+}
+
+function renderCityMap() {
+  const host = document.getElementById("attractionsMap");
+  host.classList.toggle("hidden", !mapState.open);
+  document.getElementById("attractionsList").classList.toggle("hidden", mapState.open);
+  if (!mapState.open) return;
+
+  const cities = mapCities();
+  if (!cities.includes(mapState.city)) mapState.city = filterState.city || cities[0];
+  const points = mapPoints(mapState.city);
+
+  host.innerHTML = `
+    <div class="map-head">
+      <div class="chips map-cities">
+        ${cities
+          .map((c) => {
+            const safe = escapeHtml(c);
+            return `<button class="chip${c === mapState.city ? " active" : ""}" data-city="${safe}">${safe}</button>`;
+          })
+          .join("")}
+      </div>
+      <button class="chip map-scope" type="button">
+        ${mapState.scope === "near" ? "📍 Blisko" : "🌏 Cały region"}
+      </button>
+    </div>
+    <div class="map-viewport">
+      <div class="map-layer"></div>
+      <div class="map-zoom">
+        <button type="button" data-zoom="1" aria-label="Przybliż">+</button>
+        <button type="button" data-zoom="-1" aria-label="Oddal">−</button>
+      </div>
+      <span class="map-attrib">© OpenStreetMap</span>
+    </div>
+    ${
+      points.some((p) => p.kind === "attraction")
+        ? ""
+        : `<p class="map-note">Brak zaplanowanych atrakcji w tym mieście — widać sam nocleg.</p>`
+    }
+  `;
+
+  const viewport = host.querySelector(".map-viewport");
+  const layer = host.querySelector(".map-layer");
+  recenterMap(points, viewport.clientWidth, viewport.clientHeight);
+  syncMapLayer(layer, points);
+
+  host.querySelector(".map-cities").addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    mapState.city = chip.dataset.city;
+    renderCityMap();
+  });
+
+  host.querySelector(".map-scope").addEventListener("click", () => {
+    mapState.scope = mapState.scope === "near" ? "region" : "near";
+    renderCityMap();
+  });
+
+  host.querySelector(".map-zoom").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-zoom]");
+    if (!btn) return;
+    const next = mapState.z + Number(btn.dataset.zoom);
+    if (next < MAP_MIN_ZOOM || next > MAP_MAX_ZOOM) return;
+    mapState.z = next;
+    syncMapLayer(layer, points);
+  });
+
+  bindMapDrag(viewport, layer, points);
+}
+
+// W trakcie przeciągania ruszamy tylko warstwą (transform) — przeliczanie
+// kafelków przy każdym pointermove gubiłoby płynność i zasypywało OSM żądaniami.
+function bindMapDrag(viewport, layer, points) {
+  let start = null;
+  let moved = 0;
+
+  viewport.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("[data-zoom]")) return;
+    start = { x: e.clientX, y: e.clientY };
+    moved = 0;
+    viewport.setPointerCapture(e.pointerId);
+  });
+
+  viewport.addEventListener("pointermove", (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    moved = Math.max(moved, Math.abs(dx) + Math.abs(dy));
+    layer.style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+
+  const finish = (e) => {
+    if (!start) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    start = null;
+
+    // Ruch powyżej 8 px to przeciąganie, nie klik — inaczej mapa otwierałaby
+    // szczegóły przy każdej próbie przesunięcia kadru.
+    if (moved <= 8) {
+      layer.style.transform = "";
+      const pin = e.target.closest(".map-pin");
+      if (pin) openMapPoint(points[Number(pin.dataset.index)]);
+      return;
+    }
+
+    const c = mercProject(mapState.lat, mapState.lon, mapState.z);
+    const next = mercUnproject(c.x - dx, c.y - dy, mapState.z);
+    mapState.lat = next.lat;
+    mapState.lon = next.lon;
+    syncMapLayer(layer, points);
+  };
+
+  viewport.addEventListener("pointerup", finish);
+  viewport.addEventListener("pointercancel", () => {
+    start = null;
+    layer.style.transform = "";
+  });
+}
+
 // ---------- Pogoda (Open-Meteo — darmowe API, bez klucza) ----------
 // Prognoza sięga tylko ~16 dni do przodu, a wyjazd trwa 19 dni. Dalsze dni
 // dostają "typową pogodę": średnią z tych samych dat z trzech ostatnich lat.
@@ -1126,6 +1482,8 @@ function openModal(html) {
   document.getElementById("modalBody").innerHTML = html;
   document.getElementById("detailModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
+  // Dopiero po zdjęciu .hidden kontener ma niezerową szerokość.
+  mountMiniMaps();
 }
 
 function closeDetail() {
@@ -1169,6 +1527,7 @@ function openDetail(item, city, category) {
         ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">🔗 rezerwacja</a>` : ""}
         ${item.custom ? `<button class="modal-delete" type="button">🗑️ Usuń atrakcję</button>` : ""}
       </div>
+      ${miniMapHtml(item)}
       <div class="comments">
         <div class="comment-list">${commentsHtml(item.id)}</div>
         <div class="comment-form">
@@ -1370,6 +1729,7 @@ function renderAttractions() {
             ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">rezerwacja →</a>` : ""}
             ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
           </div>
+          ${miniMapHtml(item)}
           ${dateControl}
           <label class="visit-check">
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
@@ -1446,6 +1806,9 @@ function renderAttractions() {
   if (!container.children.length) {
     container.innerHTML = `<p class="empty-msg">Nic nie pasuje 🐼</p>`;
   }
+
+  mountMiniMaps();
+  renderCityMap();
 }
 
 // ---------- Logowanie ----------
@@ -1557,6 +1920,7 @@ function switchView(view) {
   if (activeBtn) activeBtn.classList.add("active");
 
   if (view === "timeline") scrollToToday();
+  mountMiniMaps();
 }
 
 function init() {
@@ -1572,6 +1936,15 @@ function init() {
   });
 
   document.getElementById("userBadge").addEventListener("click", openAccountPanel);
+
+  document.getElementById("mapToggleBtn").addEventListener("click", (e) => {
+    mapState.open = !mapState.open;
+    e.currentTarget.classList.toggle("active", mapState.open);
+    renderCityMap();
+  });
+
+  window.addEventListener("scroll", mountMiniMaps, { passive: true });
+  window.addEventListener("resize", mountMiniMaps);
 
   // Kopia zapasowa jest obsługiwana i z panelu konta, i z paska ostrzeżenia.
   document.addEventListener("click", (e) => {

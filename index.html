@@ -51,6 +51,7 @@
     <div class="filters">
       <div class="filters-top">
         <input id="searchInput" class="search-input" type="search" placeholder="Szukaj atrakcji…" autocomplete="off" />
+        <button id="mapToggleBtn" class="add-btn ghost" type="button" aria-label="Pokaż mapę">🗺️</button>
         <button id="addAttractionBtn" class="add-btn" type="button">+ Dodaj</button>
       </div>
       <div id="cityChips" class="chips"></div>
@@ -66,6 +67,7 @@
         <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
       </div>
     </div>
+    <div id="attractionsMap" class="map-view hidden"></div>
     <div id="attractionsList" class="attractions-list"></div>
   </section>
 
