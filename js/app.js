@@ -1260,11 +1260,8 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
-  // Portfel jest osobnym panelem, nie sekcją EVENTS, więc "Wszystko" go nie obejmuje.
   container.innerHTML =
-    chip("all", "Wszystko") +
-    LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
-    chip("wallet", "💴 Portfel");
+    chip("all", "Wszystko") + LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -1281,12 +1278,6 @@ function renderLogisticsChips() {
 
 function renderLogistics() {
   const container = document.getElementById("logisticsList");
-
-  if (walletOpen()) {
-    container.innerHTML = walletHtml();
-    bindFunds(container);
-    return;
-  }
 
   const sections =
     logisticsFilter === "all"
@@ -1335,7 +1326,7 @@ async function fetchFxRate() {
     if (typeof rate !== "number") return;
     setStoreValue("fx", "rate", rate);
     setStoreValue("fx", "ts", Date.now());
-    if (walletOpen()) renderLogistics();
+    renderWallet();
   } catch {
     // Brak sieci — zostaje ostatni znany kurs albo FX_FALLBACK.
   }
@@ -1443,8 +1434,10 @@ function settleBalance(list) {
   return { from, to, yen: Math.abs(owed) };
 }
 
-function walletOpen() {
-  return logisticsFilter === "wallet";
+function renderWallet() {
+  const container = document.getElementById("walletPanel");
+  container.innerHTML = walletHtml();
+  bindFunds(container);
 }
 
 function expenseFormHtml(dayKeys) {
@@ -1508,7 +1501,7 @@ function openExpenseForm() {
       dateKey: f.get("dateKey"),
     });
     closeDetail();
-    renderLogistics();
+    renderWallet();
   });
 }
 
@@ -1526,7 +1519,7 @@ function walletHtml() {
 
   return `
     <section class="trip-section">
-      <h2 class="trip-section-title">💴 Portfel<span class="trip-count">${list.length}</span></h2>
+      <h2 class="trip-section-title">Wydatki<span class="trip-count">${list.length}</span></h2>
 
       <div class="wallet-total">
         <p class="wallet-yen">${formatMoney(totalYen, "JPY")}</p>
@@ -2253,6 +2246,8 @@ function init() {
       selectUser(swap.dataset.switch);
       closeDetail();
       refreshAttractions();
+      // Stan portfela jest osobisty — po zmianie osoby pokazujemy jej kwoty.
+      renderWallet();
       return;
     }
     const wallet = e.target.closest("[data-wallet]");
@@ -2260,7 +2255,7 @@ function init() {
       if (wallet.dataset.wallet === "add") openExpenseForm();
       else if (confirm("Usunąć ten wydatek?")) {
         setStoreValue("expenses", wallet.dataset.id, "");
-        renderLogistics();
+        renderWallet();
       }
     }
   });
@@ -2299,6 +2294,7 @@ function init() {
   renderFilterChips();
   renderLogisticsChips();
   renderLogistics();
+  renderWallet();
   renderTimeline();
   renderCalendar();
   renderAttractions();

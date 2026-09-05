@@ -16,6 +16,7 @@
     <button class="nav-btn" data-view="timeline" id="navTimeline">📆 Dzień po dniu</button>
     <button class="nav-btn" data-view="attractions" id="navAttractions">🗺️ Atrakcje</button>
     <button class="nav-btn" data-view="logistics" id="navLogistics">🧳 Podróż</button>
+    <button class="nav-btn" data-view="wallet" id="navWallet">💴 Portfel</button>
     <!-- ZALOGOWANY UŻYTKOWNIK (klik = zmiana użytkownika) -->
     <button id="userBadge" class="user-badge hidden"></button>
   </nav>
@@ -75,6 +76,11 @@
   <section id="view-logistics" class="view hidden">
     <div id="logisticsChips" class="chips"></div>
     <div id="logisticsList"></div>
+  </section>
+
+  <!-- WIDOK: PORTFEL (stan gotówki i karty, wydatki, bilans) -->
+  <section id="view-wallet" class="view hidden">
+    <div id="walletPanel"></div>
   </section>
 
   <!-- SZCZEGÓŁY ATRAKCJI (po kliknięciu w kartę) -->
