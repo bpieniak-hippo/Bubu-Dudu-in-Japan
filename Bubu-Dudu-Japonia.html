@@ -2578,8 +2578,8 @@ function tileGrid(lat, lon, z, w, h) {
   return out;
 }
 
-// Nieinteraktywny podgląd na karcie i w oknie szczegółów. Sam kontener —
-// kafelki dokłada mountMiniMaps, bo dopiero po wstawieniu w DOM znamy szerokość.
+// Nieinteraktywny podgląd w oknie szczegółów. Sam kontener — kafelki dokłada
+// fillMiniMap, bo dopiero po wstawieniu w DOM znamy szerokość ramki.
 function miniMapHtml(item) {
   if (item.lat == null || item.lon == null) return "";
   return `
@@ -2590,10 +2590,10 @@ function miniMapHtml(item) {
   `;
 }
 
+// Wołane po wstawieniu okna w DOM — dopiero wtedy znamy szerokość ramki.
 function fillMiniMap(el) {
   const w = el.clientWidth;
-  if (!w || el.dataset.ready) return;
-  el.dataset.ready = "1";
+  if (!w) return;
 
   tileGrid(Number(el.dataset.lat), Number(el.dataset.lon), MINI_ZOOM, w, el.clientHeight).forEach(
     (t) => {
@@ -2609,19 +2609,6 @@ function fillMiniMap(el) {
       el.prepend(img);
     }
   );
-}
-
-// Kafelki dociągamy dopiero, gdy podgląd zbliża się do ekranu. Bez tego wejście
-// w Atrakcje to ~75 żądań naraz, a regulamin OpenStreetMap prosi o umiar.
-// Ten sam warunek załatwia ukryty widok — tam wysokość ramki wynosi 0.
-function mountMiniMaps() {
-  const margin = 150;
-  document.querySelectorAll(".map-mini:not([data-ready])").forEach((el) => {
-    const r = el.getBoundingClientRect();
-    if (!r.height) return;
-    if (r.bottom < -margin || r.top > window.innerHeight + margin) return;
-    fillMiniMap(el);
-  });
 }
 
 // ---------- Mapa miasta ----------
@@ -3568,7 +3555,7 @@ function openModal(html) {
   document.getElementById("detailModal").classList.remove("hidden");
   document.body.classList.add("modal-open");
   // Dopiero po zdjęciu .hidden kontener ma niezerową szerokość.
-  mountMiniMaps();
+  document.querySelectorAll("#modalBody .map-mini").forEach(fillMiniMap);
 }
 
 function closeDetail() {
@@ -3814,7 +3801,6 @@ function renderAttractions() {
             ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">rezerwacja →</a>` : ""}
             ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
           </div>
-          ${miniMapHtml(item)}
           ${dateControl}
           <label class="visit-check">
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
@@ -3892,7 +3878,6 @@ function renderAttractions() {
     container.innerHTML = `<p class="empty-msg">Nic nie pasuje 🐼</p>`;
   }
 
-  mountMiniMaps();
   renderCityMap();
 }
 
@@ -4005,7 +3990,6 @@ function switchView(view) {
   if (activeBtn) activeBtn.classList.add("active");
 
   if (view === "timeline") scrollToToday();
-  mountMiniMaps();
 }
 
 function init() {
@@ -4028,8 +4012,6 @@ function init() {
     renderCityMap();
   });
 
-  window.addEventListener("scroll", mountMiniMaps, { passive: true });
-  window.addEventListener("resize", mountMiniMaps);
 
   // Kopia zapasowa jest obsługiwana i z panelu konta, i z paska ostrzeżenia.
   document.addEventListener("click", (e) => {
