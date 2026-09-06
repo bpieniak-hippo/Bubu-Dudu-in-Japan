@@ -734,3 +734,75 @@ const ATTRACTIONS = [
     ],
   },
 ];
+
+// Checklista pakowania. Grupy `shared: true` to jedna wspólna lista dla obojga
+// (jeden zestaw rzeczy na dwie osoby), reszta jest osobna — Bartek i Paula
+// odhaczają u siebie, bo każde pakuje własną walizkę.
+const PACKING = [
+  {
+    group: "📄 Dokumenty",
+    items: [
+      { id: "passport", label: "Paszport", note: "ważny min. 6 miesięcy po powrocie" },
+      { id: "idp", label: "Międzynarodowe prawo jazdy", note: "wymagane do auta na Okinawie" },
+      { id: "driving-licence", label: "Krajowe prawo jazdy", note: "bez niego międzynarodowe jest nieważne" },
+      { id: "insurance", label: "Ubezpieczenie podróżne" },
+      { id: "boarding", label: "Karty pokładowe i rezerwacje" },
+      { id: "cards", label: "Karty płatnicze" },
+      { id: "visit-japan", label: "Visit Japan Web — kody QR" },
+    ],
+  },
+  {
+    group: "🔌 Elektronika",
+    items: [
+      { id: "phone", label: "Telefon i ładowarka" },
+      { id: "powerbank", label: "Powerbank", note: "tylko w bagażu podręcznym" },
+      { id: "cables", label: "Kable i ładowarka USB-C" },
+      { id: "headphones", label: "Słuchawki" },
+      { id: "camera", label: "Aparat i karta pamięci" },
+    ],
+  },
+  {
+    group: "👕 Ubrania",
+    items: [
+      { id: "light", label: "Lekkie ubrania", note: "wrzesień w Japonii to 28° i wilgoć" },
+      { id: "longsleeve", label: "Coś z długim rękawem", note: "klimatyzacja i świątynie" },
+      { id: "hoodie", label: "Bluza", note: "wieczory w Minakami są chłodne" },
+      { id: "shoes", label: "Wygodne buty na cały dzień" },
+      { id: "socks", label: "Skarpetki bez dziur", note: "buty zdejmuje się w świątyniach" },
+      { id: "swim", label: "Strój kąpielowy", note: "Okinawa" },
+      { id: "rain", label: "Peleryna albo mała parasolka", note: "wrzesień to jeszcze sezon tajfunowy" },
+    ],
+  },
+  {
+    group: "🧴 Kosmetyki i leki",
+    items: [
+      { id: "cosmetics", label: "Kosmetyki" },
+      { id: "meds", label: "Leki na receptę", note: "w oryginalnych opakowaniach" },
+      { id: "sunscreen", label: "Krem z filtrem" },
+      { id: "blisters", label: "Plastry na odciski", note: "20 000 kroków dziennie to norma" },
+    ],
+  },
+  {
+    group: "🧰 Wspólne — sprzęt",
+    shared: true,
+    items: [
+      { id: "adapter", label: "Przejściówka typ A", note: "Japonia ma 100 V i płaskie wtyki" },
+      { id: "powerstrip", label: "Listwa zasilająca", note: "jedno gniazdo obsłuży wszystko" },
+      { id: "firstaid", label: "Apteczka" },
+      { id: "mosquito", label: "Środek na komary" },
+      { id: "foldbag", label: "Składana torba na zakupy" },
+      { id: "scale", label: "Waga bagażowa", note: "limity na lot krajowy są niższe" },
+    ],
+  },
+  {
+    group: "🇯🇵 Wspólne — na miejscu",
+    shared: true,
+    items: [
+      { id: "yen", label: "Gotówka w jenach", note: "mniejsze lokale nie biorą kart" },
+      { id: "suica", label: "Karta Suica / Pasmo", note: "można dodać do Apple Wallet" },
+      { id: "towel", label: "Ręcznik do rąk", note: "w toaletach zwykle nie ma suszarek" },
+      { id: "trashbag", label: "Woreczek na śmieci", note: "koszy na ulicach prawie nie ma" },
+      { id: "backup", label: "Kopia danych aplikacji na obu telefonach" },
+    ],
+  },
+];

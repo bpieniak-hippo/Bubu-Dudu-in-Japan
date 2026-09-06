@@ -62,6 +62,7 @@ const STORE_KEYS = {
   expenses: "bubuDudu.expenses",
   funds: "bubuDudu.funds",
   fx: "bubuDudu.fx",
+  packing: "bubuDudu.packing",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -143,7 +144,7 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds"];
+const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds", "packing"];
 
 function probeStorage() {
   try {
@@ -202,7 +203,7 @@ async function exportData() {
 // wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
 function mergeBackup(backup) {
   if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
-  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0 };
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0, packing: 0 };
   let conflicts = 0;
 
   const incoming = backup.data;
@@ -252,6 +253,14 @@ function mergeBackup(backup) {
     }
   });
 
+  // Klucz pakowania ma w sobie właściciela, więc suma nie miesza list Bartka i Pauli.
+  // Spakowane u kogokolwiek zostaje spakowane — cofnięcie ptaszka to zawsze świadoma decyzja.
+  Object.entries(incoming.packing || {}).forEach(([key, value]) => {
+    if (!value || loadStore("packing")[key]) return;
+    added.packing += 1;
+    setStoreValue("packing", key, value);
+  });
+
   // Godzina bez daty nic nie znaczy, więc idzie tą samą zasadą: lokalna wygrywa.
   Object.entries(incoming.times || {}).forEach(([id, time]) => {
     if (!time || getUserTimes()[id]) return;
@@ -270,6 +279,7 @@ function importSummaryHtml({ added, conflicts }) {
     added.visited && `${added.visited} odhaczonych atrakcji`,
     added.custom && `${added.custom} własnych atrakcji`,
     added.expenses && `${added.expenses} wydatków`,
+    added.packing && `${added.packing} spakowanych rzeczy`,
   ].filter(Boolean);
 
   return `
@@ -1284,8 +1294,11 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
+  // Pakowanie to osobny panel, nie sekcja z EVENTS — dlatego jest poza "Wszystko".
   container.innerHTML =
-    chip("all", "Wszystko") + LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("");
+    chip("all", "Wszystko") +
+    LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
+    chip("packing", "🎒 Pakowanie");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -1300,8 +1313,95 @@ function renderLogisticsChips() {
   });
 }
 
+// ---------- Pakowanie ----------
+// Klucz `${owner}:${id}` — Bartek i Paula pakują osobne walizki, więc ptaszek
+// jednego nie może odhaczać drugiemu. "wspolne" to trzecia, dzielona lista.
+let packingOwner = "";
+
+function packingKey(owner, id) {
+  return `${owner}:${id}`;
+}
+
+function packingGroups(owner) {
+  return PACKING.filter((g) => Boolean(g.shared) === (owner === "wspolne"));
+}
+
+function packingStats(owner) {
+  const store = loadStore("packing");
+  const items = packingGroups(owner).flatMap((g) => g.items);
+  const done = items.filter((it) => store[packingKey(owner, it.id)]).length;
+  return { done, total: items.length };
+}
+
+function packingOwners() {
+  return USERS.map((u) => ({ id: u.id, label: `🧍 ${u.name}` })).concat({
+    id: "wspolne",
+    label: "👫 Wspólne",
+  });
+}
+
+function packingHtml() {
+  const owner = packingOwner;
+  const store = loadStore("packing");
+  const { done, total } = packingStats(owner);
+
+  const tabs = packingOwners()
+    .map(
+      (o) =>
+        `<button type="button" class="packing-tab${o.id === owner ? " active" : ""}" data-packing-owner="${o.id}">${o.label}</button>`
+    )
+    .join("");
+
+  const groups = packingGroups(owner)
+    .map(
+      (g) => `
+        <section class="packing-group">
+          <h2 class="trip-section-title">${g.group}<span class="trip-count">${g.items.length}</span></h2>
+          ${g.items
+            .map((it) => {
+              const key = packingKey(owner, it.id);
+              return `
+                <label class="packing-item${store[key] ? " done" : ""}">
+                  <input type="checkbox" data-packing-item="${key}"${store[key] ? " checked" : ""} />
+                  <span class="packing-label">${escapeHtml(it.label)}${
+                    it.note ? `<span class="packing-note">${escapeHtml(it.note)}</span>` : ""
+                  }</span>
+                </label>
+              `;
+            })
+            .join("")}
+        </section>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="packing-panel">
+      <div class="packing-tabs">${tabs}</div>
+      <div class="progress packing-progress">
+        <p class="progress-label">${done}/${total} spakowane</p>
+        <div class="progress-bar"><div class="progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
+      </div>
+      ${groups}
+    </div>
+  `;
+}
+
+function renderPacking(container) {
+  if (!packingOwner) {
+    const user = getCurrentUser();
+    packingOwner = user ? user.id : "wspolne";
+  }
+  container.innerHTML = packingHtml();
+}
+
 function renderLogistics() {
   const container = document.getElementById("logisticsList");
+
+  if (logisticsFilter === "packing") {
+    renderPacking(container);
+    return;
+  }
 
   const sections =
     logisticsFilter === "all"
@@ -2181,6 +2281,9 @@ function selectUser(id) {
   });
   document.getElementById("startBtn").disabled = false;
   renderUserBadge();
+  // Po przelogowaniu lista pakowania ma pokazywać walizkę tego, kto właśnie wszedł.
+  packingOwner = id;
+  renderLogistics();
 }
 
 // Panel pod plakietką w nawigacji — jedyne miejsce na sprawy konta i danych,
@@ -2309,6 +2412,12 @@ function init() {
       refreshAttractions();
       return;
     }
+    const tab = e.target.closest("[data-packing-owner]");
+    if (tab) {
+      packingOwner = tab.dataset.packingOwner;
+      renderLogistics();
+      return;
+    }
     const wallet = e.target.closest("[data-wallet]");
     if (wallet) {
       const what = wallet.dataset.wallet;
@@ -2325,6 +2434,17 @@ function init() {
   });
 
   document.addEventListener("change", (e) => {
+    const box = e.target.closest("[data-packing-item]");
+    if (box) {
+      setStoreValue("packing", box.dataset.packingItem, box.checked ? 1 : "");
+      // Bez pełnego re-renderu — lista skoczyłaby pod palcem przy odhaczaniu.
+      box.closest(".packing-item").classList.toggle("done", box.checked);
+      const { done, total } = packingStats(packingOwner);
+      const panel = box.closest(".packing-panel");
+      panel.querySelector(".progress-label").textContent = `${done}/${total} spakowane`;
+      panel.querySelector(".progress-fill").style.width = `${total ? (done / total) * 100 : 0}%`;
+      return;
+    }
     if (e.target.id !== "backupFile" || !e.target.files.length) return;
     importData(e.target.files[0]);
   });

@@ -1308,6 +1308,66 @@ body.modal-open { overflow: hidden; }
 
 .wallet-del:hover { background: #fff0f5; color: var(--pink-dark); }
 
+/* ---------- PAKOWANIE ---------- */
+.packing-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.packing-tab {
+  flex: 1;
+  min-height: 40px;
+  border: none;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+.packing-tab.active { background: var(--pink-dark); color: #fff; }
+
+.packing-progress { margin-bottom: 18px; }
+
+.packing-group { margin-bottom: 20px; }
+
+.packing-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 11px 14px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+/* Odhaczone zjeżdża wizualnie na drugi plan, ale zostaje na liście —
+   przy pakowaniu chce się widzieć, co już jest w walizce. */
+.packing-item.done { opacity: 0.5; }
+.packing-item.done .packing-label { text-decoration: line-through; }
+
+.packing-item input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--pink-dark);
+}
+
+.packing-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.92rem;
+}
+
+.packing-note { font-size: 0.76rem; color: #999; }
+
 /* ---------- MAPA ---------- */
 /* Kafelki są pozycjonowane względem środka ramki, więc CSS nie musi znać
    ich liczby ani rozmiaru kontenera. Brak touch-action: przewijanie listy
@@ -2277,6 +2337,78 @@ const ATTRACTIONS = [
   },
 ];
 
+// Checklista pakowania. Grupy `shared: true` to jedna wspólna lista dla obojga
+// (jeden zestaw rzeczy na dwie osoby), reszta jest osobna — Bartek i Paula
+// odhaczają u siebie, bo każde pakuje własną walizkę.
+const PACKING = [
+  {
+    group: "📄 Dokumenty",
+    items: [
+      { id: "passport", label: "Paszport", note: "ważny min. 6 miesięcy po powrocie" },
+      { id: "idp", label: "Międzynarodowe prawo jazdy", note: "wymagane do auta na Okinawie" },
+      { id: "driving-licence", label: "Krajowe prawo jazdy", note: "bez niego międzynarodowe jest nieważne" },
+      { id: "insurance", label: "Ubezpieczenie podróżne" },
+      { id: "boarding", label: "Karty pokładowe i rezerwacje" },
+      { id: "cards", label: "Karty płatnicze" },
+      { id: "visit-japan", label: "Visit Japan Web — kody QR" },
+    ],
+  },
+  {
+    group: "🔌 Elektronika",
+    items: [
+      { id: "phone", label: "Telefon i ładowarka" },
+      { id: "powerbank", label: "Powerbank", note: "tylko w bagażu podręcznym" },
+      { id: "cables", label: "Kable i ładowarka USB-C" },
+      { id: "headphones", label: "Słuchawki" },
+      { id: "camera", label: "Aparat i karta pamięci" },
+    ],
+  },
+  {
+    group: "👕 Ubrania",
+    items: [
+      { id: "light", label: "Lekkie ubrania", note: "wrzesień w Japonii to 28° i wilgoć" },
+      { id: "longsleeve", label: "Coś z długim rękawem", note: "klimatyzacja i świątynie" },
+      { id: "hoodie", label: "Bluza", note: "wieczory w Minakami są chłodne" },
+      { id: "shoes", label: "Wygodne buty na cały dzień" },
+      { id: "socks", label: "Skarpetki bez dziur", note: "buty zdejmuje się w świątyniach" },
+      { id: "swim", label: "Strój kąpielowy", note: "Okinawa" },
+      { id: "rain", label: "Peleryna albo mała parasolka", note: "wrzesień to jeszcze sezon tajfunowy" },
+    ],
+  },
+  {
+    group: "🧴 Kosmetyki i leki",
+    items: [
+      { id: "cosmetics", label: "Kosmetyki" },
+      { id: "meds", label: "Leki na receptę", note: "w oryginalnych opakowaniach" },
+      { id: "sunscreen", label: "Krem z filtrem" },
+      { id: "blisters", label: "Plastry na odciski", note: "20 000 kroków dziennie to norma" },
+    ],
+  },
+  {
+    group: "🧰 Wspólne — sprzęt",
+    shared: true,
+    items: [
+      { id: "adapter", label: "Przejściówka typ A", note: "Japonia ma 100 V i płaskie wtyki" },
+      { id: "powerstrip", label: "Listwa zasilająca", note: "jedno gniazdo obsłuży wszystko" },
+      { id: "firstaid", label: "Apteczka" },
+      { id: "mosquito", label: "Środek na komary" },
+      { id: "foldbag", label: "Składana torba na zakupy" },
+      { id: "scale", label: "Waga bagażowa", note: "limity na lot krajowy są niższe" },
+    ],
+  },
+  {
+    group: "🇯🇵 Wspólne — na miejscu",
+    shared: true,
+    items: [
+      { id: "yen", label: "Gotówka w jenach", note: "mniejsze lokale nie biorą kart" },
+      { id: "suica", label: "Karta Suica / Pasmo", note: "można dodać do Apple Wallet" },
+      { id: "towel", label: "Ręcznik do rąk", note: "w toaletach zwykle nie ma suszarek" },
+      { id: "trashbag", label: "Woreczek na śmieci", note: "koszy na ulicach prawie nie ma" },
+      { id: "backup", label: "Kopia danych aplikacji na obu telefonach" },
+    ],
+  },
+];
+
 // Logika aplikacji: przełączanie widoków, kalendarz, atrakcje
 
 const MONTH_NAMES = [
@@ -2341,6 +2473,7 @@ const STORE_KEYS = {
   expenses: "bubuDudu.expenses",
   funds: "bubuDudu.funds",
   fx: "bubuDudu.fx",
+  packing: "bubuDudu.packing",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -2422,7 +2555,7 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds"];
+const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds", "packing"];
 
 function probeStorage() {
   try {
@@ -2481,7 +2614,7 @@ async function exportData() {
 // wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
 function mergeBackup(backup) {
   if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
-  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0 };
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0, packing: 0 };
   let conflicts = 0;
 
   const incoming = backup.data;
@@ -2531,6 +2664,14 @@ function mergeBackup(backup) {
     }
   });
 
+  // Klucz pakowania ma w sobie właściciela, więc suma nie miesza list Bartka i Pauli.
+  // Spakowane u kogokolwiek zostaje spakowane — cofnięcie ptaszka to zawsze świadoma decyzja.
+  Object.entries(incoming.packing || {}).forEach(([key, value]) => {
+    if (!value || loadStore("packing")[key]) return;
+    added.packing += 1;
+    setStoreValue("packing", key, value);
+  });
+
   // Godzina bez daty nic nie znaczy, więc idzie tą samą zasadą: lokalna wygrywa.
   Object.entries(incoming.times || {}).forEach(([id, time]) => {
     if (!time || getUserTimes()[id]) return;
@@ -2549,6 +2690,7 @@ function importSummaryHtml({ added, conflicts }) {
     added.visited && `${added.visited} odhaczonych atrakcji`,
     added.custom && `${added.custom} własnych atrakcji`,
     added.expenses && `${added.expenses} wydatków`,
+    added.packing && `${added.packing} spakowanych rzeczy`,
   ].filter(Boolean);
 
   return `
@@ -3563,8 +3705,11 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
+  // Pakowanie to osobny panel, nie sekcja z EVENTS — dlatego jest poza "Wszystko".
   container.innerHTML =
-    chip("all", "Wszystko") + LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("");
+    chip("all", "Wszystko") +
+    LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
+    chip("packing", "🎒 Pakowanie");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -3579,8 +3724,95 @@ function renderLogisticsChips() {
   });
 }
 
+// ---------- Pakowanie ----------
+// Klucz `${owner}:${id}` — Bartek i Paula pakują osobne walizki, więc ptaszek
+// jednego nie może odhaczać drugiemu. "wspolne" to trzecia, dzielona lista.
+let packingOwner = "";
+
+function packingKey(owner, id) {
+  return `${owner}:${id}`;
+}
+
+function packingGroups(owner) {
+  return PACKING.filter((g) => Boolean(g.shared) === (owner === "wspolne"));
+}
+
+function packingStats(owner) {
+  const store = loadStore("packing");
+  const items = packingGroups(owner).flatMap((g) => g.items);
+  const done = items.filter((it) => store[packingKey(owner, it.id)]).length;
+  return { done, total: items.length };
+}
+
+function packingOwners() {
+  return USERS.map((u) => ({ id: u.id, label: `🧍 ${u.name}` })).concat({
+    id: "wspolne",
+    label: "👫 Wspólne",
+  });
+}
+
+function packingHtml() {
+  const owner = packingOwner;
+  const store = loadStore("packing");
+  const { done, total } = packingStats(owner);
+
+  const tabs = packingOwners()
+    .map(
+      (o) =>
+        `<button type="button" class="packing-tab${o.id === owner ? " active" : ""}" data-packing-owner="${o.id}">${o.label}</button>`
+    )
+    .join("");
+
+  const groups = packingGroups(owner)
+    .map(
+      (g) => `
+        <section class="packing-group">
+          <h2 class="trip-section-title">${g.group}<span class="trip-count">${g.items.length}</span></h2>
+          ${g.items
+            .map((it) => {
+              const key = packingKey(owner, it.id);
+              return `
+                <label class="packing-item${store[key] ? " done" : ""}">
+                  <input type="checkbox" data-packing-item="${key}"${store[key] ? " checked" : ""} />
+                  <span class="packing-label">${escapeHtml(it.label)}${
+                    it.note ? `<span class="packing-note">${escapeHtml(it.note)}</span>` : ""
+                  }</span>
+                </label>
+              `;
+            })
+            .join("")}
+        </section>
+      `
+    )
+    .join("");
+
+  return `
+    <div class="packing-panel">
+      <div class="packing-tabs">${tabs}</div>
+      <div class="progress packing-progress">
+        <p class="progress-label">${done}/${total} spakowane</p>
+        <div class="progress-bar"><div class="progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
+      </div>
+      ${groups}
+    </div>
+  `;
+}
+
+function renderPacking(container) {
+  if (!packingOwner) {
+    const user = getCurrentUser();
+    packingOwner = user ? user.id : "wspolne";
+  }
+  container.innerHTML = packingHtml();
+}
+
 function renderLogistics() {
   const container = document.getElementById("logisticsList");
+
+  if (logisticsFilter === "packing") {
+    renderPacking(container);
+    return;
+  }
 
   const sections =
     logisticsFilter === "all"
@@ -4460,6 +4692,9 @@ function selectUser(id) {
   });
   document.getElementById("startBtn").disabled = false;
   renderUserBadge();
+  // Po przelogowaniu lista pakowania ma pokazywać walizkę tego, kto właśnie wszedł.
+  packingOwner = id;
+  renderLogistics();
 }
 
 // Panel pod plakietką w nawigacji — jedyne miejsce na sprawy konta i danych,
@@ -4588,6 +4823,12 @@ function init() {
       refreshAttractions();
       return;
     }
+    const tab = e.target.closest("[data-packing-owner]");
+    if (tab) {
+      packingOwner = tab.dataset.packingOwner;
+      renderLogistics();
+      return;
+    }
     const wallet = e.target.closest("[data-wallet]");
     if (wallet) {
       const what = wallet.dataset.wallet;
@@ -4604,6 +4845,17 @@ function init() {
   });
 
   document.addEventListener("change", (e) => {
+    const box = e.target.closest("[data-packing-item]");
+    if (box) {
+      setStoreValue("packing", box.dataset.packingItem, box.checked ? 1 : "");
+      // Bez pełnego re-renderu — lista skoczyłaby pod palcem przy odhaczaniu.
+      box.closest(".packing-item").classList.toggle("done", box.checked);
+      const { done, total } = packingStats(packingOwner);
+      const panel = box.closest(".packing-panel");
+      panel.querySelector(".progress-label").textContent = `${done}/${total} spakowane`;
+      panel.querySelector(".progress-fill").style.width = `${total ? (done / total) * 100 : 0}%`;
+      return;
+    }
     if (e.target.id !== "backupFile" || !e.target.files.length) return;
     importData(e.target.files[0]);
   });
