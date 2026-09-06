@@ -1328,12 +1328,22 @@ body.modal-open { overflow: hidden; }
 .packing-item {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 6px;
   margin-bottom: 6px;
   padding: 11px 14px;
   border-radius: 14px;
   background: #fff;
   box-shadow: var(--shadow);
+}
+
+/* Etykieta bierze całą szerokość, żeby dało się trafić palcem w dowolne
+   miejsce wiersza, a nie tylko w sam kwadracik. */
+.packing-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -1358,6 +1368,53 @@ body.modal-open { overflow: hidden; }
 }
 
 .packing-note { font-size: 0.76rem; color: #999; }
+
+.packing-del {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #ccc;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.packing-del:hover { background: #fff0f5; color: var(--pink-dark); }
+
+.packing-add {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* 16px, inaczej iOS Safari przybliża stronę przy wejściu w pole */
+.packing-add input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  border: 1px dashed #e6c8d4;
+  border-radius: 14px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.packing-add input:focus { outline: none; border-color: var(--pink-dark); }
+
+.packing-add button {
+  flex: none;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--pink-dark);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
 
 /* ---------- MAPA ---------- */
 /* Kafelki są pozycjonowane względem środka ramki, więc CSS nie musi znać

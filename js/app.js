@@ -63,6 +63,7 @@ const STORE_KEYS = {
   funds: "bubuDudu.funds",
   fx: "bubuDudu.fx",
   packing: "bubuDudu.packing",
+  packingOwn: "bubuDudu.packingOwn",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -144,7 +145,17 @@ function setVisited(id, isVisited) {
 // ---------- Kopia zapasowa ----------
 // Store'y warte przeniesienia na drugi telefon. Pogoda to cache (odtworzy się sama),
 // a sesja jest osobista — oba pomijamy.
-const BACKUP_STORES = ["dates", "times", "visited", "comments", "custom", "expenses", "funds", "packing"];
+const BACKUP_STORES = [
+  "dates",
+  "times",
+  "visited",
+  "comments",
+  "custom",
+  "expenses",
+  "funds",
+  "packing",
+  "packingOwn",
+];
 
 function probeStorage() {
   try {
@@ -203,7 +214,7 @@ async function exportData() {
 // wygrywa to, co użytkownik ma u siebie. Zwraca podsumowanie do pokazania.
 function mergeBackup(backup) {
   if (!backup || backup.v !== 1 || !backup.data) throw new Error("To nie jest kopia z tej aplikacji.");
-  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0, packing: 0 };
+  const added = { comments: 0, visited: 0, custom: 0, dates: 0, times: 0, expenses: 0, packing: 0, packingOwn: 0 };
   let conflicts = 0;
 
   const incoming = backup.data;
@@ -261,6 +272,13 @@ function mergeBackup(backup) {
     setStoreValue("packing", key, value);
   });
 
+  // Dopiski mają losowe id, więc suma po kluczu niczego nie zdubluje.
+  Object.entries(incoming.packingOwn || {}).forEach(([key, label]) => {
+    if (!label || loadStore("packingOwn")[key]) return;
+    added.packingOwn += 1;
+    setStoreValue("packingOwn", key, label);
+  });
+
   // Godzina bez daty nic nie znaczy, więc idzie tą samą zasadą: lokalna wygrywa.
   Object.entries(incoming.times || {}).forEach(([id, time]) => {
     if (!time || getUserTimes()[id]) return;
@@ -280,6 +298,7 @@ function importSummaryHtml({ added, conflicts }) {
     added.custom && `${added.custom} własnych atrakcji`,
     added.expenses && `${added.expenses} wydatków`,
     added.packing && `${added.packing} spakowanych rzeczy`,
+    added.packingOwn && `${added.packingOwn} dopisków do pakowania`,
   ].filter(Boolean);
 
   return `
@@ -1326,9 +1345,20 @@ function packingGroups(owner) {
   return PACKING.filter((g) => Boolean(g.shared) === (owner === "wspolne"));
 }
 
+// Rzeczy dopisane ręcznie. Ten sam schemat klucza co przy ptaszkach, więc
+// dopisek Pauli nie pojawi się na liście Bartka, a "wspolne:" widzą oboje.
+function getPackingOwn(owner) {
+  const prefix = `${owner}:`;
+  return Object.entries(loadStore("packingOwn"))
+    .filter(([key]) => key.startsWith(prefix))
+    .map(([key, label]) => ({ id: key.slice(prefix.length), label }));
+}
+
 function packingStats(owner) {
   const store = loadStore("packing");
-  const items = packingGroups(owner).flatMap((g) => g.items);
+  const items = packingGroups(owner)
+    .flatMap((g) => g.items)
+    .concat(getPackingOwn(owner));
   const done = items.filter((it) => store[packingKey(owner, it.id)]).length;
   return { done, total: items.length };
 }
@@ -1340,9 +1370,24 @@ function packingOwners() {
   });
 }
 
+function packingItemHtml(owner, item, own) {
+  const key = packingKey(owner, item.id);
+  const checked = loadStore("packing")[key];
+  return `
+    <div class="packing-item${checked ? " done" : ""}">
+      <label class="packing-check">
+        <input type="checkbox" data-packing-item="${key}"${checked ? " checked" : ""} />
+        <span class="packing-label">${escapeHtml(item.label)}${
+          item.note ? `<span class="packing-note">${escapeHtml(item.note)}</span>` : ""
+        }</span>
+      </label>
+      ${own ? `<button type="button" class="packing-del" data-packing-del="${key}" aria-label="Usuń rzecz">✕</button>` : ""}
+    </div>
+  `;
+}
+
 function packingHtml() {
   const owner = packingOwner;
-  const store = loadStore("packing");
   const { done, total } = packingStats(owner);
 
   const tabs = packingOwners()
@@ -1357,23 +1402,14 @@ function packingHtml() {
       (g) => `
         <section class="packing-group">
           <h2 class="trip-section-title">${g.group}<span class="trip-count">${g.items.length}</span></h2>
-          ${g.items
-            .map((it) => {
-              const key = packingKey(owner, it.id);
-              return `
-                <label class="packing-item${store[key] ? " done" : ""}">
-                  <input type="checkbox" data-packing-item="${key}"${store[key] ? " checked" : ""} />
-                  <span class="packing-label">${escapeHtml(it.label)}${
-                    it.note ? `<span class="packing-note">${escapeHtml(it.note)}</span>` : ""
-                  }</span>
-                </label>
-              `;
-            })
-            .join("")}
+          ${g.items.map((it) => packingItemHtml(owner, it, false)).join("")}
         </section>
       `
     )
     .join("");
+
+  const own = getPackingOwn(owner);
+  const ownTitle = owner === "wspolne" ? "🧺 Nasze dopiski" : "🧺 Moje dopiski";
 
   return `
     <div class="packing-panel">
@@ -1383,6 +1419,14 @@ function packingHtml() {
         <div class="progress-bar"><div class="progress-fill" style="width:${total ? (done / total) * 100 : 0}%"></div></div>
       </div>
       ${groups}
+      <section class="packing-group">
+        <h2 class="trip-section-title">${ownTitle}<span class="trip-count packing-own-count">${own.length}</span></h2>
+        <div class="packing-own">${own.map((it) => packingItemHtml(owner, it, true)).join("")}</div>
+        <form class="packing-add">
+          <input type="text" name="label" placeholder="Co jeszcze zabrać?" maxlength="60" autocomplete="off" />
+          <button type="submit">Dodaj</button>
+        </form>
+      </section>
     </div>
   `;
 }
@@ -1393,6 +1437,36 @@ function renderPacking(container) {
     packingOwner = user ? user.id : "wspolne";
   }
   container.innerHTML = packingHtml();
+
+  const form = container.querySelector(".packing-add");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const input = form.querySelector("input");
+    const label = input.value.trim();
+    if (!label) return;
+    const id = `own${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+    setStoreValue("packingOwn", packingKey(packingOwner, id), label);
+    // Dopisanie w miejscu zamiast re-renderu — pole zostaje aktywne i można
+    // wyrzucić z głowy kilka rzeczy pod rząd, bez klikania w nie za każdym razem.
+    container
+      .querySelector(".packing-own")
+      .insertAdjacentHTML("beforeend", packingItemHtml(packingOwner, { id, label }, true));
+    input.value = "";
+    input.focus();
+    refreshPackingCounts();
+  });
+}
+
+// Licznik i pasek żyją poza odhaczoną pozycją, więc po każdej zmianie trzeba je
+// odświeżyć osobno — całego panelu nie ruszamy, żeby nie zgubić fokusu i miejsca.
+function refreshPackingCounts() {
+  const panel = document.querySelector(".packing-panel");
+  if (!panel) return;
+  const { done, total } = packingStats(packingOwner);
+  panel.querySelector(".progress-label").textContent = `${done}/${total} spakowane`;
+  panel.querySelector(".progress-fill").style.width = `${total ? (done / total) * 100 : 0}%`;
+  panel.querySelector(".packing-own-count").textContent =
+    panel.querySelectorAll(".packing-own .packing-item").length;
 }
 
 function renderLogistics() {
@@ -2412,6 +2486,17 @@ function init() {
       refreshAttractions();
       return;
     }
+    const packDel = e.target.closest("[data-packing-del]");
+    if (packDel) {
+      if (confirm("Usunąć tę rzecz z listy?")) {
+        const key = packDel.dataset.packingDel;
+        setStoreValue("packingOwn", key, "");
+        setStoreValue("packing", key, "");
+        packDel.closest(".packing-item").remove();
+        refreshPackingCounts();
+      }
+      return;
+    }
     const tab = e.target.closest("[data-packing-owner]");
     if (tab) {
       packingOwner = tab.dataset.packingOwner;
@@ -2439,10 +2524,7 @@ function init() {
       setStoreValue("packing", box.dataset.packingItem, box.checked ? 1 : "");
       // Bez pełnego re-renderu — lista skoczyłaby pod palcem przy odhaczaniu.
       box.closest(".packing-item").classList.toggle("done", box.checked);
-      const { done, total } = packingStats(packingOwner);
-      const panel = box.closest(".packing-panel");
-      panel.querySelector(".progress-label").textContent = `${done}/${total} spakowane`;
-      panel.querySelector(".progress-fill").style.width = `${total ? (done / total) * 100 : 0}%`;
+      refreshPackingCounts();
       return;
     }
     if (e.target.id !== "backupFile" || !e.target.files.length) return;
