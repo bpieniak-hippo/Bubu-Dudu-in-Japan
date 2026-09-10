@@ -3,3 +3,6 @@
 
 # Luźne grafiki robocze w katalogu głównym (assets/ zostaje śledzone)
 /*.png
+
+# Paczka do udostępniania — budowana na żądanie z aktualnego kodu
+/Bubu-Dudu-Japonia.zip
