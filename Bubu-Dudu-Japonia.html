@@ -1148,6 +1148,24 @@ body.modal-open { overflow: hidden; }
 
 .btn-account:hover { background: #fff0f5; }
 
+.btn-account[disabled] { opacity: 0.45; cursor: default; }
+.btn-account[disabled]:hover { background: #fff; }
+
+.sync-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+/* 16px, inaczej iOS Safari przybliża stronę przy wejściu w pole */
+.sync-fields input {
+  padding: 11px 14px;
+  border: 1px solid #e6c8d4;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.sync-fields input:focus { outline: none; border-color: var(--pink-dark); }
+
 .storage-bar {
   height: 8px;
   border-radius: 999px;
@@ -2706,6 +2724,11 @@ const STORE_KEYS = {
   packing: "bubuDudu.packing",
   packingOwn: "bubuDudu.packingOwn",
   meta: "bubuDudu.meta",
+  // Adres i klucz do bazy wpisuje się w aplikacji, na każdym urządzeniu osobno —
+  // dzięki temu nie ma ich w kodzie, który leży publicznie na GitHubie.
+  sync: "bubuDudu.sync",
+  // Zapisy czekające na wysłanie do bazy, żeby brak zasięgu niczego nie gubił.
+  outbox: "bubuDudu.outbox",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -2731,6 +2754,7 @@ function setStoreValue(name, id, value) {
     storageState = full ? "full" : "blocked";
     renderStorageWarning();
   }
+  queueForSync(name, id);
 }
 
 function loadStore(name) {
@@ -2984,6 +3008,191 @@ function importData(file) {
     openModal(`<div class="account-panel"><h2 class="account-title">Nie udało się odczytać pliku</h2></div>`);
   };
   reader.readAsText(file);
+}
+
+// ---------- Synchronizacja z bazą (Supabase przez REST) ----------
+// Bez bibliotek i bez CDN-a: Supabase wystawia zwykłe końcówki REST, więc wystarczy
+// fetch. Dzięki temu build.py dalej skleja jeden plik, który działa spod file://.
+//
+// localStorage zostaje źródłem prawdy dla ekranu — apka ma działać bez zasięgu,
+// a z tym w Japonii bywa różnie. Każdy zapis ląduje w outboxie i jedzie do bazy
+// przy najbliższej okazji. Przy sprzeczności wygrywa nowszy zapis, o czym
+// rozstrzyga zegar serwera, nie telefonu.
+const SYNC_TABLE = "bubu_store";
+const SYNC_SEP = "\u0000";
+
+// "off" (brak konfiguracji) | "idle" | "syncing" | "ok" | "error"
+let syncState = { status: "off", message: "" };
+let syncTimer = null;
+// Przy wciąganiu zmian z bazy zapis nie może wrócić do outboxu — inaczej oba
+// telefony w kółko odsyłałyby sobie te same wiersze.
+let applyingRemote = false;
+
+function syncConfig() {
+  const cfg = loadStore("sync");
+  return {
+    url: (cfg.url || "").replace(/\/+$/, ""),
+    key: cfg.key || "",
+    lastPull: cfg.lastPull || "",
+  };
+}
+
+function syncReady() {
+  const { url, key } = syncConfig();
+  return Boolean(url && key);
+}
+
+function syncRequest(path, options = {}) {
+  const { url, key } = syncConfig();
+  return fetch(`${url}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    },
+  });
+}
+
+function queueForSync(name, id) {
+  if (applyingRemote || !BACKUP_STORES.includes(name)) return;
+  setStoreValue("outbox", name + SYNC_SEP + id, new Date().toISOString());
+  if (!syncReady()) return;
+  // Odhaczanie listy pakowania to seria szybkich zapisów — czekamy, aż ucichnie,
+  // zamiast strzelać osobnym żądaniem do każdego ptaszka.
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow(), 1500);
+}
+
+// Pierwsze podłączenie: daty i komentarze powstały, zanim synchronizacja istniała,
+// więc outbox jest pusty i baza nigdy by ich nie zobaczyła. Wrzucamy wszystko.
+function queueEverything() {
+  BACKUP_STORES.forEach((name) => {
+    Object.keys(loadStore(name)).forEach((id) => queueForSync(name, id));
+  });
+}
+
+async function syncNow({ manual = false } = {}) {
+  if (!syncReady() || syncState.status === "syncing") return;
+  clearTimeout(syncTimer);
+  setSyncState("syncing", "");
+  let pulled = 0;
+  try {
+    await syncPush();
+    pulled = await syncPull();
+    setSyncState(
+      "ok",
+      pulled ? `pobrano ${pulled} ${changeForm(pulled, "zmianę", "zmiany", "zmian")}` : "wszystko aktualne"
+    );
+  } catch (err) {
+    // Brak zasięgu nie może czyścić outboxu — te zapisy pojadą przy następnej próbie.
+    // fetch przy zerwanym połączeniu rzuca TypeError z angielskim tekstem, więc
+    // podmieniamy go na zdanie, które coś mówi osobie stojącej na dworcu w Kioto.
+    setSyncState("error", err instanceof TypeError ? "brak połączenia" : err.message);
+  }
+  if (manual || pulled) refreshAfterSync();
+}
+
+async function syncPush() {
+  const keys = Object.keys(loadStore("outbox"));
+  if (!keys.length) return 0;
+
+  const rows = keys.map((key) => {
+    const sep = key.indexOf(SYNC_SEP);
+    const store = key.slice(0, sep);
+    const id = key.slice(sep + 1);
+    const value = loadStore(store)[id];
+    // Skasowana pozycja zostaje w bazie jako pusty wiersz. Bez tego drugi telefon
+    // nigdy by się nie dowiedział, że coś zniknęło, i odesłałby to z powrotem.
+    return { store, item_key: id, value: value === undefined ? null : value };
+  });
+
+  const res = await syncRequest(SYNC_TABLE, {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify(rows),
+  });
+  if (!res.ok) throw new Error(await syncError(res));
+
+  keys.forEach((key) => setStoreValue("outbox", key, ""));
+  return rows.length;
+}
+
+async function syncPull() {
+  const { lastPull } = syncConfig();
+  const since = lastPull ? `&updated_at=gt.${encodeURIComponent(lastPull)}` : "";
+  const res = await syncRequest(`${SYNC_TABLE}?select=store,item_key,value,updated_at${since}`);
+  if (!res.ok) throw new Error(await syncError(res));
+
+  const rows = await res.json();
+  const pending = loadStore("outbox");
+  let newest = lastPull;
+  let applied = 0;
+
+  applyingRemote = true;
+  rows.forEach((row) => {
+    if (!BACKUP_STORES.includes(row.store)) return;
+    // Jeśli ta sama pozycja czeka u nas na wysyłkę, nasza wersja jest świeższa.
+    // Nie ruszamy jej i nie przesuwamy znacznika, żeby wiersz wrócił następnym razem.
+    if (pending[row.store + SYNC_SEP + row.item_key]) return;
+    if (row.updated_at > newest) newest = row.updated_at;
+    applied += 1;
+    setStoreValue(row.store, row.item_key, row.value === null ? "" : row.value);
+  });
+  applyingRemote = false;
+
+  if (newest !== lastPull) setStoreValue("sync", "lastPull", newest);
+  return applied;
+}
+
+async function syncError(res) {
+  const body = await res.text();
+  try {
+    return JSON.parse(body).message || `${res.status} ${res.statusText}`;
+  } catch {
+    return `${res.status} ${res.statusText}`;
+  }
+}
+
+function setSyncState(status, message) {
+  syncState = { status, message };
+  const line = document.getElementById("syncStatus");
+  if (line) line.textContent = syncStatusText();
+}
+
+// Bez odmiany licznik czytałby się jak z automatu ("pobrano 1 zmian").
+// `few` to 2–4, ale nie 12–14 — stąd wyjątek na nastki.
+function changeForm(n, one, few, many) {
+  if (n === 1) return one;
+  const rest = n % 10;
+  const teens = n % 100 >= 12 && n % 100 <= 14;
+  return rest >= 2 && rest <= 4 && !teens ? few : many;
+}
+
+function pluralChanges(n) {
+  return `${n} ${changeForm(n, "zmiana czeka", "zmiany czekają", "zmian czeka")}`;
+}
+
+function syncStatusText() {
+  const waiting = Object.keys(loadStore("outbox")).length;
+  const tail = waiting ? ` ${pluralChanges(waiting)} na wysyłkę.` : "";
+  const map = {
+    off: "Nieskonfigurowana — dane zostają tylko na tym urządzeniu.",
+    idle: "Gotowa.",
+    syncing: "Synchronizuję…",
+    ok: `Zsynchronizowane (${syncState.message}).`,
+    error: `Nie udało się: ${syncState.message}.`,
+  };
+  return (map[syncState.status] || "") + tail;
+}
+
+function refreshAfterSync() {
+  refreshAttractions();
+  renderTimeline();
+  renderCalendar();
+  renderLogistics();
+  renderWallet();
 }
 
 // ---------- Zalogowany użytkownik ----------
@@ -5018,6 +5227,7 @@ function selectUser(id) {
 // bo pasek nawigacji nie ma już miejsca na kolejny przycisk.
 function openAccountPanel() {
   const user = getCurrentUser();
+  const cfg = syncConfig();
   const used = storageSize();
   const limit = 5 * 1024 * 1024;
   const pct = Math.min(100, Math.round((used / limit) * 100));
@@ -5044,6 +5254,23 @@ function openAccountPanel() {
         <button type="button" class="btn-account" data-backup="import">⬆️ Wczytaj kopię</button>
       </div>
       <input type="file" id="backupFile" accept="application/json,.json" class="hidden" />
+
+      <h3 class="account-sub">Synchronizacja</h3>
+      <p class="account-line muted">
+        Wspólna baza, żeby daty, wydatki i pakowanie widzieć na obu telefonach.
+        Adres i klucz wklejasz raz na każdym urządzeniu — nie ma ich w kodzie apki.
+      </p>
+      <div class="sync-fields">
+        <input type="url" id="syncUrl" placeholder="https://twojprojekt.supabase.co"
+               value="${escapeHtml(cfg.url)}" autocomplete="off" spellcheck="false" />
+        <input type="password" id="syncKey" placeholder="klucz anon"
+               value="${escapeHtml(cfg.key)}" autocomplete="off" spellcheck="false" />
+      </div>
+      <div class="account-actions">
+        <button type="button" class="btn-account" data-sync="save">💾 Zapisz</button>
+        <button type="button" class="btn-account" data-sync="now"${syncReady() ? "" : " disabled"}>🔄 Synchronizuj</button>
+      </div>
+      <p class="account-line muted" id="syncStatus">${escapeHtml(syncStatusText())}</p>
 
       <h3 class="account-sub">Pamięć</h3>
       <div class="storage-bar"><div class="storage-fill" style="width:${pct}%"></div></div>
@@ -5133,6 +5360,21 @@ function init() {
       else document.getElementById("backupFile").click();
       return;
     }
+    const sync = e.target.closest("[data-sync]");
+    if (sync) {
+      if (sync.dataset.sync === "save") {
+        setStoreValue("sync", "url", document.getElementById("syncUrl").value.trim());
+        setStoreValue("sync", "key", document.getElementById("syncKey").value.trim());
+        if (!syncReady()) {
+          setSyncState("off", "");
+          return;
+        }
+        setSyncState("idle", "");
+        queueEverything();
+      }
+      syncNow({ manual: true });
+      return;
+    }
     const swap = e.target.closest("[data-switch]");
     if (swap) {
       selectUser(swap.dataset.switch);
@@ -5211,6 +5453,10 @@ function init() {
   probeStorage();
   renderStorageWarning();
   seedSuggestedDates();
+  if (syncReady()) {
+    setSyncState("idle", "");
+    syncNow();
+  }
   renderLoginPanel();
   renderFilterChips();
   renderLogisticsChips();

@@ -1139,6 +1139,24 @@ body.modal-open { overflow: hidden; }
 
 .btn-account:hover { background: #fff0f5; }
 
+.btn-account[disabled] { opacity: 0.45; cursor: default; }
+.btn-account[disabled]:hover { background: #fff; }
+
+.sync-fields { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+
+/* 16px, inaczej iOS Safari przybliża stronę przy wejściu w pole */
+.sync-fields input {
+  padding: 11px 14px;
+  border: 1px solid #e6c8d4;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.sync-fields input:focus { outline: none; border-color: var(--pink-dark); }
+
 .storage-bar {
   height: 8px;
   border-radius: 999px;
