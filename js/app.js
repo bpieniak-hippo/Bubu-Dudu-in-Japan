@@ -372,8 +372,10 @@ let applyingRemote = false;
 function syncConfig() {
   const cfg = loadStore("sync");
   return {
-    url: (cfg.url || "").replace(/\/+$/, ""),
-    key: cfg.key || "",
+    // Panel Supabase pokazuje adres razem z końcówką /rest/v1/, a my ją doklejamy
+    // sami — bez tego obcięcia wychodziłoby to dwa razy i nic by się nie łączyło.
+    url: (cfg.url || "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, ""),
+    key: (cfg.key || "").trim(),
     lastPull: cfg.lastPull || "",
   };
 }
