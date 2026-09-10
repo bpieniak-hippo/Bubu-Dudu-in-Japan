@@ -405,6 +405,18 @@ body {
 .attraction-card.no-photo { padding-top: 12px; }
 
 .attraction-card .name { font-weight: 700; margin: 0 0 4px; }
+
+/* Bez zdjęcia znak wodny nie ma na czym leżeć, więc awatar autora siada
+   przy nazwie — inaczej po nowych atrakcjach nie widać, kto je dorzucił. */
+.attraction-card .name .wm-avatar {
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+  vertical-align: -5px;
+}
 .attraction-card .meta { font-size: 0.82rem; color: #7a6a6a; margin: 0 0 6px; }
 .attraction-card a { color: var(--blue-dark); font-size: 0.82rem; }
 

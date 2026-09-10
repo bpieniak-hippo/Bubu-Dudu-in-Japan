@@ -64,6 +64,7 @@ const STORE_KEYS = {
   fx: "bubuDudu.fx",
   packing: "bubuDudu.packing",
   packingOwn: "bubuDudu.packingOwn",
+  meta: "bubuDudu.meta",
 };
 
 // Część przeglądarek blokuje localStorage przy otwarciu pliku przez file://,
@@ -124,6 +125,18 @@ function getUserDates() {
 
 function setUserDate(id, date) {
   setStoreValue("dates", id, date);
+}
+
+// Daty przepisane z arkusza są orientacyjne — wchodzą raz, jako punkt wyjścia,
+// a potem zachowują się jak każda inna: da się je przestawić albo skasować.
+// Flaga pilnuje, żeby skasowany dzień nie wrócił przy następnym otwarciu apki.
+function seedSuggestedDates() {
+  if (loadStore("meta").datesSeeded) return;
+  const saved = getUserDates();
+  flattenAttractions().forEach((item) => {
+    if (item.suggestedDate && !saved[item.id]) setUserDate(item.id, item.suggestedDate);
+  });
+  setStoreValue("meta", "datesSeeded", 1);
 }
 
 function getUserTimes() {
@@ -2237,7 +2250,7 @@ function renderAttractions() {
                  </div>`
               : ""
           }
-          <p class="name">${escapeHtml(item.name)}</p>
+          <p class="name">${item.photo ? "" : authorWatermark(item)}${escapeHtml(item.name)}</p>
           ${meta ? `<p class="meta">${escapeHtml(meta)}</p>` : ""}
           <div class="card-links">
             ${item.link ? `<a href="${item.link}" target="_blank" rel="noopener">rezerwacja →</a>` : ""}
@@ -2556,6 +2569,7 @@ function init() {
 
   probeStorage();
   renderStorageWarning();
+  seedSuggestedDates();
   renderLoginPanel();
   renderFilterChips();
   renderLogisticsChips();
