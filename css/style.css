@@ -1563,7 +1563,22 @@ body.modal-open { overflow: hidden; }
 
 .map-cities { flex: 1; min-width: 0; }
 
-.map-scope { flex: none; }
+.map-scope,
+.map-locate { flex: none; }
+
+/* Zielona kropka z pulsującą obwódką — hotel jest niebieski, atrakcje różowe,
+   więc własna pozycja musi mieć trzeci kolor, żeby nie zlewała się z pinezkami. */
+.map-me-dot {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: #2e9e6b;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 4px rgba(46, 158, 107, 0.3), 0 1px 5px rgba(0, 0, 0, 0.4);
+  z-index: 3;
+}
 
 .map-viewport {
   position: relative;
