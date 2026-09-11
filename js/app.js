@@ -989,6 +989,43 @@ function openMapPoint(p) {
   else openDetail(p.item, p.city, p.category);
 }
 
+// Klik w pinezkę pokazuje wizytówkę przy dolnej krawędzi mapy. Pełne okno
+// zasłaniało cały kadr, więc po zamknięciu trzeba było szukać miejsca od nowa —
+// tak widać dalej okolicę, a do pełnej karty jest stąd jedno kliknięcie.
+function showMapCard(scope, points, index) {
+  const p = points[index];
+  const card = scope.querySelector(".map-card");
+  const photo = p.kind === "hotel" ? p.event.photo : p.item.photo;
+  const meta = p.kind === "hotel" ? "🏨 Nocleg" : p.category;
+
+  card.innerHTML = `
+    ${
+      photo
+        ? `<img class="map-card-thumb" src="${photo}" alt="" />`
+        : `<span class="map-card-thumb is-empty">${p.kind === "hotel" ? "🏨" : "📍"}</span>`
+    }
+    <div class="map-card-body">
+      <p class="map-card-name">${escapeHtml(p.label)}</p>
+      <p class="map-card-meta">${escapeHtml(meta || "")}</p>
+    </div>
+    <button type="button" class="map-card-open" data-index="${index}">Otwórz kartę →</button>
+    <button type="button" class="map-card-close" aria-label="Zamknij wizytówkę">✕</button>
+  `;
+  card.classList.remove("hidden");
+
+  scope.querySelectorAll(".map-pin.selected").forEach((el) => el.classList.remove("selected"));
+  const pin = scope.querySelector(`.map-pin[data-index="${index}"]`);
+  if (pin) pin.classList.add("selected");
+}
+
+function hideMapCard(scope) {
+  const card = scope.querySelector(".map-card");
+  if (!card || card.classList.contains("hidden")) return;
+  card.classList.add("hidden");
+  card.textContent = "";
+  scope.querySelectorAll(".map-pin.selected").forEach((el) => el.classList.remove("selected"));
+}
+
 function renderCityMap() {
   const host = document.getElementById("attractionsMap");
   host.classList.toggle("hidden", !mapState.open);
@@ -1020,6 +1057,7 @@ function renderCityMap() {
         <button type="button" data-zoom="-1" aria-label="Oddal">−</button>
       </div>
       <span class="map-attrib">© OpenStreetMap</span>
+      <div class="map-card hidden"></div>
     </div>
     ${
       points.some((p) => p.kind === "attraction")
@@ -1045,6 +1083,15 @@ function renderCityMap() {
     renderCityMap();
   });
 
+  host.querySelector(".map-card").addEventListener("click", (e) => {
+    if (e.target.closest(".map-card-close")) {
+      hideMapCard(viewport);
+      return;
+    }
+    const open = e.target.closest(".map-card-open");
+    if (open) openMapPoint(points[Number(open.dataset.index)]);
+  });
+
   host.querySelector(".map-zoom").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-zoom]");
     if (!btn) return;
@@ -1064,7 +1111,9 @@ function bindMapDrag(viewport, layer, points) {
   let moved = 0;
 
   viewport.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("[data-zoom]")) return;
+    // Wizytówka leży na mapie, więc bez tego wyjątku kliknięcie w jej przycisk
+    // liczyłoby się jako początek przeciągania i zamykało ją przed czasem.
+    if (e.target.closest("[data-zoom]") || e.target.closest(".map-card")) return;
     start = { x: e.clientX, y: e.clientY };
     moved = 0;
     viewport.setPointerCapture(e.pointerId);
@@ -1089,7 +1138,8 @@ function bindMapDrag(viewport, layer, points) {
     if (moved <= 8) {
       layer.style.transform = "";
       const pin = e.target.closest(".map-pin");
-      if (pin) openMapPoint(points[Number(pin.dataset.index)]);
+      if (pin) showMapCard(viewport, points, Number(pin.dataset.index));
+      else hideMapCard(viewport);
       return;
     }
 

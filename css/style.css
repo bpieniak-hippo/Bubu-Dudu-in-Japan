@@ -1622,6 +1622,93 @@ body.modal-open { overflow: hidden; }
   border-radius: 6px 0 0 0;
 }
 
+/* Wizytówka wybranej pinezki — siada nad atrybucją OSM, przy dolnej krawędzi
+   mapy, żeby nie zasłaniać okolicy klikniętego miejsca. */
+.map-card {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+.map-card-thumb {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 11px;
+  object-fit: cover;
+}
+
+.map-card-thumb.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cream);
+  font-size: 1.3rem;
+}
+
+.map-card-body { flex: 1; min-width: 0; }
+
+/* Długie nazwy rozpychały wizytówkę na trzy linijki i zjadała pół kadru —
+   dwie wystarczą, resztę ucina wielokropek. */
+.map-card-name {
+  margin: 0;
+  font-weight: 700;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.map-card-meta { margin: 2px 0 0; font-size: 0.72rem; color: #a89898; }
+
+.map-card-open {
+  flex: none;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--pink-dark);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+/* Krzyżyk siedzi w rogu wizytówki, poza układem — inaczej zjadałby szerokość
+   potrzebną nazwie, która na telefonie i tak ledwo się mieści. */
+.map-card-close {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: #c4b4b4;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Wybrana pinezka rośnie i zmienia obwódkę, żeby było widać, czyja to wizytówka. */
+.map-view .map-pin.selected {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-color: var(--pink-dark);
+  box-shadow: 0 0 0 3px rgba(214, 122, 160, 0.35);
+  z-index: 2;
+}
+
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {
   .nav {
