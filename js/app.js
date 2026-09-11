@@ -2447,6 +2447,25 @@ function readPhoto(file) {
   });
 }
 
+// Mapa rysuje tylko punkty ze współrzędnymi, a formularz ich nie zbiera — więc
+// dopytujemy Nominatim (wyszukiwarka OpenStreetMap, bez klucza) o nazwę w Japonii.
+// Bez tego własna atrakcja siedziała wyłącznie na liście i nie było jej na mapce.
+async function geocodePlace(name, city) {
+  const query = `${name}, ${city}`;
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q=${encodeURIComponent(query)}`
+    );
+    if (!res.ok) return null;
+    const hits = await res.json();
+    if (!hits.length) return null;
+    return { lat: Number(hits[0].lat), lon: Number(hits[0].lon) };
+  } catch (err) {
+    // Plik offline i brak zasięgu — atrakcja i tak ma się dodać, tylko bez pinezki.
+    return null;
+  }
+}
+
 function refreshAttractions() {
   renderFilterChips();
   renderAttractions();
@@ -2491,6 +2510,10 @@ function openAddForm() {
   `);
 
   const form = document.getElementById("addForm");
+  // Gdy wyszukiwarka nie zna miejsca, pierwsze kliknięcie tylko ostrzega. Drugie
+  // dodaje bez pinezki — inaczej literówka w nazwie cicho gubiłaby atrakcję z mapy.
+  let skipGeocode = false;
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const error = document.getElementById("addError");
@@ -2508,6 +2531,18 @@ function openAddForm() {
     const fields = form.elements;
     const name = fields.name.value.trim();
     const city = fields.city.value.trim();
+
+    const spot = skipGeocode ? null : await geocodePlace(name, city);
+    if (!spot && !skipGeocode) {
+      skipGeocode = true;
+      error.textContent =
+        "Nie znalazłem tego miejsca na mapie. Popraw nazwę albo kliknij jeszcze raz, żeby dodać bez pinezki.";
+      error.classList.remove("hidden");
+      submit.disabled = false;
+      submit.textContent = "Dodaj mimo to";
+      return;
+    }
+
     const item = {
       id: `custom-${Date.now()}`,
       name,
@@ -2516,6 +2551,8 @@ function openAddForm() {
       desc: fields.desc.value.trim(),
       photo: await readPhoto(fields.photo.files[0]),
       mapQuery: `${name} ${city}`,
+      lat: spot ? spot.lat : null,
+      lon: spot ? spot.lon : null,
       author: user.id,
       custom: true,
     };
