@@ -1,0 +1,11 @@
+# Strona to zwykłe pliki — nic się nie kompiluje. Jedyny krok publikacji wkleja
+# adres i klucz bazy ze zmiennych środowiskowych, żeby telefony łączyły się same.
+[build]
+  command = "python3 netlify_build.py"
+  publish = "."
+
+  # Netlify domyślnie przerywa publikację, gdy znajdzie wartość zmiennej
+  # środowiskowej w gotowej stronie. Tutaj wklejamy je tam celowo — klucz `anon`
+  # jest przeznaczony do przeglądarki, a dostępu pilnuje RLS po stronie bazy.
+  [build.environment]
+    SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY"

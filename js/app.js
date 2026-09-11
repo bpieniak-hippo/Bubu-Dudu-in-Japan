@@ -371,11 +371,15 @@ let applyingRemote = false;
 
 function syncConfig() {
   const cfg = loadStore("sync");
+  // Adres i klucz wstrzyknięte przy publikacji (netlify_build.py) są punktem
+  // wyjścia, żeby nowy telefon działał od razu, bez przepisywania czegokolwiek.
+  // Wpis z panelu je przykrywa — plik offline i tak nic wbudowanego nie ma.
+  const built = window.BUBU_SYNC || {};
   return {
     // Panel Supabase pokazuje adres razem z końcówką /rest/v1/, a my ją doklejamy
     // sami — bez tego obcięcia wychodziłoby to dwa razy i nic by się nie łączyło.
-    url: (cfg.url || "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, ""),
-    key: (cfg.key || "").trim(),
+    url: (cfg.url || built.url || "").trim().replace(/\/+$/, "").replace(/\/rest\/v1$/, ""),
+    key: (cfg.key || built.key || "").trim(),
     lastPull: cfg.lastPull || "",
   };
 }
@@ -2601,7 +2605,11 @@ function openAccountPanel() {
       <h3 class="account-sub">Synchronizacja</h3>
       <p class="account-line muted">
         Wspólna baza, żeby daty, wydatki i pakowanie widzieć na obu telefonach.
-        Adres i klucz wklejasz raz na każdym urządzeniu — nie ma ich w kodzie apki.
+        ${
+          window.BUBU_SYNC && window.BUBU_SYNC.url
+            ? "Wypełnione automatycznie — wpisuj coś tutaj tylko wtedy, gdy chcesz wskazać inną bazę."
+            : "Adres i klucz wklejasz raz na tym urządzeniu."
+        }
       </p>
       <div class="sync-fields">
         <input type="url" id="syncUrl" placeholder="https://twojprojekt.supabase.co"
