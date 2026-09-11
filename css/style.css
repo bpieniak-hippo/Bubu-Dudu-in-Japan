@@ -207,7 +207,57 @@ body {
   background: #f0e0e6;
 }
 
-.comment-body { min-width: 0; }
+/* Treść bierze całą wolną szerokość, żeby ołówek i krzyżyk trzymały się prawej
+   krawędzi niezależnie od tego, jak długi jest komentarz. */
+.comment-body { min-width: 0; flex: 1; }
+
+.comment-tools { flex: none; display: flex; gap: 2px; align-self: flex-start; }
+
+.comment-tool {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #ccc;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.comment-tool:hover { background: #fff0f5; color: var(--pink-dark); }
+
+.comment-edit { margin-top: 4px; }
+
+/* 16px, inaczej iOS Safari przybliża stronę przy wejściu w pole */
+.comment-edit textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #e6c8d4;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--text);
+  resize: vertical;
+}
+
+.comment-edit textarea:focus { outline: none; border-color: var(--pink-dark); }
+
+.comment-edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }
+
+.comment-edit-actions button {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 12px;
+  background: #f6eaf0;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.comment-edit-actions button[type="submit"] { background: var(--pink-dark); color: #fff; }
 
 .comment-meta { margin: 0; font-size: 0.72rem; color: #a89898; }
 
@@ -330,6 +380,16 @@ body {
 .event-card:last-child { border-bottom: none; }
 
 .event-icon { font-size: 1.4rem; }
+
+/* Miniaturka wchodzi w miejsce pinezki, więc trzyma stałą szerokość — inaczej
+   opisy zaplanowanych i pozostałych wydarzeń rozjeżdżałyby się względem siebie. */
+.event-thumb {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  object-fit: cover;
+}
 
 .event-title { font-weight: 700; margin: 0; }
 

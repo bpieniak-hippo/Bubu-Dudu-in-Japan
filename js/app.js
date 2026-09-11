@@ -569,6 +569,33 @@ function addComment(attractionId, text) {
   return true;
 }
 
+// Znacznik czasu jest zarazem identyfikatorem — po parze user|ts scalanie kopii
+// rozpoznaje ten sam wpis, więc poprawka nie zrobi z komentarza drugiego
+// egzemplarza. Ruszać można wyłącznie własne: nikt nie przepisuje cudzych słów.
+function editComment(attractionId, ts, text) {
+  const user = getCurrentUser();
+  const clean = text.trim();
+  if (!user || !clean) return false;
+  const list = getComments()[attractionId] || [];
+  const next = list.map((c) =>
+    c.ts === ts && c.user === user.id ? { ...c, text: clean, edited: Date.now() } : c
+  );
+  setStoreValue("comments", attractionId, next);
+  return true;
+}
+
+function deleteComment(attractionId, ts) {
+  const user = getCurrentUser();
+  if (!user) return false;
+  const list = getComments()[attractionId] || [];
+  setStoreValue(
+    "comments",
+    attractionId,
+    list.filter((c) => !(c.ts === ts && c.user === user.id))
+  );
+  return true;
+}
+
 function escapeHtml(s) {
   return String(s).replace(
     /[&<>"']/g,
@@ -589,20 +616,73 @@ function formatStamp(ts) {
 function commentsHtml(attractionId) {
   const list = getComments()[attractionId] || [];
   if (!list.length) return `<p class="comment-empty">Brak komentarzy</p>`;
+  const me = getCurrentUser();
   return list
     .map((c) => {
       const author = USERS.find((u) => u.id === c.user);
+      const mine = Boolean(me && c.user === me.id);
       return `
-        <div class="comment">
+        <div class="comment" data-comment="${c.ts}">
           <img class="comment-avatar" src="${author ? author.avatar : ""}" alt="" />
           <div class="comment-body">
-            <p class="comment-meta">${author ? author.name : c.user} · ${formatStamp(c.ts)}</p>
+            <p class="comment-meta">${
+              author ? escapeHtml(author.name) : escapeHtml(c.user)
+            } · ${formatStamp(c.ts)}${c.edited ? " · zmieniony" : ""}</p>
             <p class="comment-text">${escapeHtml(c.text)}</p>
           </div>
+          ${
+            mine
+              ? `<div class="comment-tools">
+                   <button type="button" class="comment-tool" data-comment-edit="${c.ts}" aria-label="Zmień komentarz">✏️</button>
+                   <button type="button" class="comment-tool" data-comment-del="${c.ts}" aria-label="Usuń komentarz">✕</button>
+                 </div>`
+              : ""
+          }
         </div>
       `;
     })
     .join("");
+}
+
+// Poprawiamy jeden komentarz w miejscu. Przerysowanie całej listy zabrałoby
+// fokus z pola i zwinęło widok pod palcem — ten sam powód co przy pakowaniu.
+function startCommentEdit(box) {
+  if (box.querySelector(".comment-edit")) return;
+  const textEl = box.querySelector(".comment-text");
+  textEl.hidden = true;
+  textEl.insertAdjacentHTML(
+    "afterend",
+    `<form class="comment-edit">
+       <textarea rows="2"></textarea>
+       <div class="comment-edit-actions">
+         <button type="button" data-cancel>Anuluj</button>
+         <button type="submit">Zapisz</button>
+       </div>
+     </form>`
+  );
+
+  const form = box.querySelector(".comment-edit");
+  const field = form.querySelector("textarea");
+  // Przez wartość, nie przez HTML — inaczej trzeba by uciekać znaki drugi raz.
+  field.value = textEl.textContent;
+  field.focus();
+  field.setSelectionRange(field.value.length, field.value.length);
+
+  const close = () => {
+    form.remove();
+    textEl.hidden = false;
+  };
+
+  form.querySelector("[data-cancel]").addEventListener("click", close);
+  form.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const list = box.closest(".comment-list");
+    if (!editComment(list.dataset.attraction, Number(box.dataset.comment), field.value)) return;
+    textEl.textContent = field.value.trim();
+    const meta = box.querySelector(".comment-meta");
+    if (!meta.textContent.endsWith("zmieniony")) meta.textContent += " · zmieniony";
+    close();
+  });
 }
 
 // ---------- Atrakcje dodane ręcznie ----------
@@ -673,6 +753,8 @@ function buildPlannedEvents() {
       title: escapeHtml(item.name),
       details: time ? "Zaplanowane na tę godzinę" : "Zaplanowane samodzielnie w zakładce Atrakcje",
       link: item.link,
+      // Miniaturka zamiast pinezki — po zdjęciu od razu widać, o które miejsce chodzi.
+      photo: item.photo,
     });
   });
   return planned;
@@ -1366,7 +1448,11 @@ function eventCardHtml(ev) {
   const link = ev.link || ev.booking;
   return `
     <div class="event-card">
-      <div class="event-icon">${ev.icon}</div>
+      ${
+        ev.photo
+          ? `<img class="event-thumb" src="${ev.photo}" alt="" loading="lazy" />`
+          : `<div class="event-icon">${ev.icon}</div>`
+      }
       <div>
         <p class="event-title">${ev.time ? `<span class="event-time">${ev.time}</span>` : ""}${ev.title}</p>
         <p class="event-details">${details}${
@@ -1436,7 +1522,10 @@ function renderTimeline() {
     const card = document.createElement("article");
     card.className = "day-card" + (key === todayKey ? " today" : "");
     card.dataset.date = key;
-    card.innerHTML = dayCardHtml(key, eventsByDay[key] || []);
+    // Turniej sumo trwa dwa tygodnie, więc w osi czasu powtarzałby się kilkanaście
+    // razy pod rząd. W kalendarzu zostaje — tam widać go po kliknięciu w dzień.
+    const dayEvents = (eventsByDay[key] || []).filter((ev) => ev.type !== "sumo");
+    card.innerHTML = dayCardHtml(key, dayEvents);
     container.appendChild(card);
   });
 }
@@ -2248,7 +2337,7 @@ function openDetail(item, city, category) {
       </div>
       ${miniMapHtml(item)}
       <div class="comments">
-        <div class="comment-list">${commentsHtml(item.id)}</div>
+        <div class="comment-list" data-attraction="${item.id}">${commentsHtml(item.id)}</div>
         <div class="comment-form">
           <input class="comment-input" type="text" placeholder="Komentarz…" />
           <button class="comment-send" type="button">Dodaj</button>
@@ -2458,7 +2547,7 @@ function renderAttractions() {
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
           </label>
           <div class="comments">
-            <div class="comment-list">${commentsHtml(item.id)}</div>
+            <div class="comment-list" data-attraction="${item.id}">${commentsHtml(item.id)}</div>
             <div class="comment-form">
               <input class="comment-input" type="text" placeholder="Komentarz…" />
               <button class="comment-send" type="button">Dodaj</button>
@@ -2731,6 +2820,26 @@ function init() {
       selectUser(swap.dataset.switch);
       closeDetail();
       refreshAttractions();
+      return;
+    }
+    // Komentarze wiszą w dwóch miejscach — na karcie i w oknie atrakcji — więc
+    // obsługa jest delegowana, a nie podpinana przy każdym rysowaniu listy.
+    const cEdit = e.target.closest("[data-comment-edit]");
+    if (cEdit) {
+      startCommentEdit(cEdit.closest(".comment"));
+      return;
+    }
+    const cDel = e.target.closest("[data-comment-del]");
+    if (cDel) {
+      if (confirm("Usunąć ten komentarz?")) {
+        const box = cDel.closest(".comment");
+        const list = box.closest(".comment-list");
+        deleteComment(list.dataset.attraction, Number(cDel.dataset.commentDel));
+        box.remove();
+        if (!list.querySelector(".comment")) {
+          list.innerHTML = `<p class="comment-empty">Brak komentarzy</p>`;
+        }
+      }
       return;
     }
     const packDel = e.target.closest("[data-packing-del]");
