@@ -3915,6 +3915,10 @@ function renderCityMap() {
 function bindMapDrag(viewport, layer, points) {
   let start = null;
   let moved = 0;
+  // Przejęcie wskaźnika przekierowuje pointerup na kadr, więc przy puszczeniu
+  // palca nie da się już zapytać, co było pod spodem. Pinezkę zapamiętujemy
+  // w momencie naciśnięcia — inaczej wizytówka nigdy by się nie otwierała.
+  let downPin = null;
 
   viewport.addEventListener("pointerdown", (e) => {
     // Wizytówka leży na mapie, więc bez tego wyjątku kliknięcie w jej przycisk
@@ -3922,6 +3926,7 @@ function bindMapDrag(viewport, layer, points) {
     if (e.target.closest("[data-zoom]") || e.target.closest(".map-card")) return;
     start = { x: e.clientX, y: e.clientY };
     moved = 0;
+    downPin = e.target.closest(".map-pin");
     viewport.setPointerCapture(e.pointerId);
   });
 
@@ -3943,8 +3948,7 @@ function bindMapDrag(viewport, layer, points) {
     // szczegóły przy każdej próbie przesunięcia kadru.
     if (moved <= 8) {
       layer.style.transform = "";
-      const pin = e.target.closest(".map-pin");
-      if (pin) showMapCard(viewport, points, Number(pin.dataset.index));
+      if (downPin) showMapCard(viewport, points, Number(downPin.dataset.index));
       else hideMapCard(viewport);
       return;
     }
@@ -3959,6 +3963,7 @@ function bindMapDrag(viewport, layer, points) {
   viewport.addEventListener("pointerup", finish);
   viewport.addEventListener("pointercancel", () => {
     start = null;
+    downPin = null;
     layer.style.transform = "";
   });
 }
