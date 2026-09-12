@@ -1745,11 +1745,12 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
-  // Pakowanie to osobny panel, nie sekcja z EVENTS — dlatego jest poza "Wszystko".
+  // Pakowanie i rozmówki to osobne panele, nie sekcje z EVENTS — dlatego są poza "Wszystko".
   container.innerHTML =
     chip("all", "Wszystko") +
     LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
-    chip("packing", "🎒 Pakowanie");
+    chip("packing", "🎒 Pakowanie") +
+    chip("phrases", "🗣️ Rozmówki");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -1909,6 +1910,11 @@ function renderLogistics() {
     return;
   }
 
+  if (logisticsFilter === "phrases") {
+    renderPhrases(container);
+    return;
+  }
+
   const sections =
     logisticsFilter === "all"
       ? LOGISTICS_SECTIONS
@@ -1926,6 +1932,72 @@ function renderLogistics() {
       `;
     })
     .join("");
+}
+
+// ---------- Rozmówki ----------
+// Szukajka po polskiej stronie — w potrzebie szybciej wpisać "toaleta" niż
+// przewijać pięć grup. Trzymana w zmiennej, bo panel przerysowuje się w całości.
+let phrasesQuery = "";
+
+function renderPhrases(container) {
+  const q = normalizeText(phrasesQuery.trim());
+  const groups = PHRASES.map((g) => ({
+    group: g.group,
+    items: q ? g.items.filter((it) => normalizeText(it.pl).includes(q)) : g.items,
+  })).filter((g) => g.items.length);
+
+  container.innerHTML = `
+    <div class="phrases">
+      <input class="phrases-search" type="search" placeholder="Szukaj po polsku…"
+             value="${escapeHtml(phrasesQuery)}" />
+      <p class="phrases-hint">Stuknij zdanie, żeby pokazać je komuś na dużym ekranie.</p>
+      ${
+        groups.length
+          ? groups
+              .map(
+                (g) => `
+                  <section class="trip-section">
+                    <h2 class="trip-section-title">${escapeHtml(g.group)}<span class="trip-count">${g.items.length}</span></h2>
+                    ${g.items
+                      .map(
+                        (it) => `
+                          <button type="button" class="phrase" data-phrase="${escapeHtml(it.jp)}">
+                            <span class="phrase-pl">${escapeHtml(it.pl)}</span>
+                            <span class="phrase-jp">${escapeHtml(it.jp)}</span>
+                            <span class="phrase-say">${escapeHtml(it.say)}</span>
+                          </button>
+                        `
+                      )
+                      .join("")}
+                  </section>
+                `
+              )
+              .join("")
+          : `<p class="map-note">Nic nie pasuje do „${escapeHtml(phrasesQuery)}".</p>`
+      }
+    </div>
+  `;
+
+  const search = container.querySelector(".phrases-search");
+  // Przerysowanie zabrałoby fokus w środku pisania, więc odbudowujemy samą listę
+  // i wracamy kursorem na koniec pola — ten sam problem co przy komentarzach.
+  search.addEventListener("input", () => {
+    phrasesQuery = search.value;
+    renderPhrases(container);
+    const next = container.querySelector(".phrases-search");
+    next.focus();
+    next.setSelectionRange(next.value.length, next.value.length);
+  });
+}
+
+// Pokazanie zdania na pełnym ekranie — w hałaśliwym sklepie prościej podsunąć
+// telefon niż walczyć z wymową.
+function showPhrase(jp) {
+  openModal(`
+    <div class="modal-content phrase-big">
+      <p class="phrase-big-jp">${escapeHtml(jp)}</p>
+    </div>
+  `);
 }
 
 // ---------- Portfel ----------
@@ -3010,6 +3082,11 @@ function init() {
           list.innerHTML = `<p class="comment-empty">Brak komentarzy</p>`;
         }
       }
+      return;
+    }
+    const phrase = e.target.closest("[data-phrase]");
+    if (phrase) {
+      showPhrase(phrase.dataset.phrase);
       return;
     }
     const packDel = e.target.closest("[data-packing-del]");

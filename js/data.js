@@ -967,3 +967,72 @@ const PACKING = [
     ],
   },
 ];
+
+// Rozmówki. `say` to wymowa zapisana po polsku, a nie transkrypcja naukowa —
+// czytane wprost brzmi wystarczająco blisko, żeby zostać zrozumianym. Japońskie
+// "u" na końcu -masu prawie zanika, stąd "-mas". Sylabę zapisujemy tak, jak się
+// ją mówi: し = "si", ち = "ci", わ jako partykuła = "ła".
+const PHRASES = [
+  {
+    group: "🙂 Podstawy",
+    items: [
+      { pl: "Dzień dobry", jp: "こんにちは", say: "kon-ni-ci-ła" },
+      { pl: "Dziękuję", jp: "ありがとうございます", say: "arigatoo gozaimas" },
+      { pl: "Przepraszam / halo, słucham pana", jp: "すみません", say: "sumimasen" },
+      { pl: "Tak", jp: "はい", say: "hai" },
+      { pl: "Nie", jp: "いいえ", say: "iie" },
+      { pl: "Proszę (podając coś)", jp: "どうぞ", say: "doozo" },
+      { pl: "Nie rozumiem", jp: "わかりません", say: "łakarimasen" },
+      { pl: "Czy mówi pan po angielsku?", jp: "英語を話せますか？", say: "eigo o hanasemas ka" },
+      { pl: "Proszę powoli", jp: "ゆっくりお願いします", say: "jukkuri onegai-simas" },
+      { pl: "Do widzenia", jp: "さようなら", say: "sajoonara" },
+    ],
+  },
+  {
+    group: "🍜 W restauracji",
+    items: [
+      { pl: "Dwie osoby", jp: "二人です", say: "futari des" },
+      { pl: "Poproszę to (wskazując)", jp: "これをください", say: "kore o kudasai" },
+      { pl: "Jest menu po angielsku?", jp: "英語のメニューはありますか？", say: "eigo no menjuu ła arimas ka" },
+      { pl: "Poproszę wodę", jp: "お水をください", say: "omizu o kudasai" },
+      { pl: "Bez mięsa proszę", jp: "肉なしでお願いします", say: "niku nasi de onegai-simas" },
+      { pl: "Mam alergię na jajka", jp: "卵アレルギーです", say: "tamago arerugii des" },
+      { pl: "Pyszne!", jp: "おいしいです", say: "oiszii des" },
+      { pl: "Poproszę rachunek", jp: "お会計をお願いします", say: "okaikei o onegai-simas" },
+      { pl: "Dziękuję za posiłek", jp: "ごちそうさまでした", say: "gocisoosama desita" },
+    ],
+  },
+  {
+    group: "🛍️ Zakupy i pieniądze",
+    items: [
+      { pl: "Ile to kosztuje?", jp: "いくらですか？", say: "ikura des ka" },
+      { pl: "Czy mogę zapłacić kartą?", jp: "カードで払えますか？", say: "kaado de haraemas ka" },
+      { pl: "Tylko oglądam", jp: "見ているだけです", say: "mite iru dake des" },
+      { pl: "Poproszę torebkę", jp: "袋をください", say: "fukuro o kudasai" },
+      { pl: "Poproszę paragon", jp: "レシートをください", say: "resziito o kudasai" },
+      { pl: "Czy mogę kupić bez podatku?", jp: "免税できますか？", say: "menzei dekimas ka" },
+    ],
+  },
+  {
+    group: "🚉 W drodze",
+    items: [
+      { pl: "Gdzie jest dworzec?", jp: "駅はどこですか？", say: "eki ła doko des ka" },
+      { pl: "Gdzie jest toaleta?", jp: "トイレはどこですか？", say: "toire ła doko des ka" },
+      { pl: "Czy ten pociąg jedzie do Kioto?", jp: "この電車は京都に行きますか？", say: "kono densia ła kjooto ni ikimas ka" },
+      { pl: "Z którego peronu?", jp: "何番線ですか？", say: "nanbansen des ka" },
+      { pl: "Zgubiłem się", jp: "道に迷いました", say: "mici ni majoimasita" },
+      { pl: "Proszę pod ten adres (pokazując)", jp: "この住所までお願いします", say: "kono dziuusio made onegai-simas" },
+    ],
+  },
+  {
+    group: "🚑 Gdy coś pójdzie źle",
+    items: [
+      { pl: "Pomocy!", jp: "助けて！", say: "taskete" },
+      { pl: "Źle się czuję", jp: "気分が悪いです", say: "kibun ga łarui des" },
+      { pl: "Potrzebuję lekarza", jp: "医者が必要です", say: "isia ga hicujoo des" },
+      { pl: "Gdzie jest szpital?", jp: "病院はどこですか？", say: "bjooin ła doko des ka" },
+      { pl: "Zgubiłem paszport", jp: "パスポートをなくしました", say: "paspooto o nakusimasita" },
+      { pl: "Proszę wezwać policję", jp: "警察を呼んでください", say: "keisacu o jonde kudasai" },
+    ],
+  },
+];

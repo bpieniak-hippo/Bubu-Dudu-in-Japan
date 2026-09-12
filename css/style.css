@@ -1724,6 +1724,70 @@ body.modal-open { overflow: hidden; }
   z-index: 2;
 }
 
+/* ---------- ROZMÓWKI ---------- */
+/* 16 px, bo poniżej iOS Safari przybliża stronę przy wejściu w pole. */
+.phrases-search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 16px;
+  background: #fff;
+}
+
+.phrases-hint {
+  margin: 6px 2px 12px;
+  font-size: 0.75rem;
+  color: #a89898;
+}
+
+.phrase {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phrase-pl {
+  display: block;
+  font-size: 0.8rem;
+  color: #a89898;
+}
+
+/* Japoński duży, bo to on idzie pod nos rozmówcy. */
+.phrase-jp {
+  display: block;
+  margin: 2px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #5a4a4a;
+}
+
+.phrase-say {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--pink-dark);
+}
+
+/* Na pełnym ekranie zdanie ma być czytelne z wyciągniętej ręki. */
+.phrase-big { padding: 32px 20px; }
+
+.phrase-big-jp {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {
   .nav {
