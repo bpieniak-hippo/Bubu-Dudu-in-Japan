@@ -1733,6 +1733,70 @@ body.modal-open { overflow: hidden; }
   z-index: 2;
 }
 
+/* ---------- ROZMÓWKI ---------- */
+/* 16 px, bo poniżej iOS Safari przybliża stronę przy wejściu w pole. */
+.phrases-search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 16px;
+  background: #fff;
+}
+
+.phrases-hint {
+  margin: 6px 2px 12px;
+  font-size: 0.75rem;
+  color: #a89898;
+}
+
+.phrase {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phrase-pl {
+  display: block;
+  font-size: 0.8rem;
+  color: #a89898;
+}
+
+/* Japoński duży, bo to on idzie pod nos rozmówcy. */
+.phrase-jp {
+  display: block;
+  margin: 2px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #5a4a4a;
+}
+
+.phrase-say {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--pink-dark);
+}
+
+/* Na pełnym ekranie zdanie ma być czytelne z wyciągniętej ręki. */
+.phrase-big { padding: 32px 20px; }
+
+.phrase-big-jp {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
 /* ---------- TELEFON ---------- */
 @media (max-width: 700px) {
   .nav {
@@ -2815,6 +2879,75 @@ const PACKING = [
       { id: "towel", label: "Ręcznik do rąk", note: "w toaletach zwykle nie ma suszarek" },
       { id: "trashbag", label: "Woreczek na śmieci", note: "koszy na ulicach prawie nie ma" },
       { id: "backup", label: "Kopia danych aplikacji na obu telefonach" },
+    ],
+  },
+];
+
+// Rozmówki. `say` to wymowa zapisana po polsku, a nie transkrypcja naukowa —
+// czytane wprost brzmi wystarczająco blisko, żeby zostać zrozumianym. Japońskie
+// "u" na końcu -masu prawie zanika, stąd "-mas". Sylabę zapisujemy tak, jak się
+// ją mówi: し = "si", ち = "ci", わ jako partykuła = "ła".
+const PHRASES = [
+  {
+    group: "🙂 Podstawy",
+    items: [
+      { pl: "Dzień dobry", jp: "こんにちは", say: "kon-ni-ci-ła" },
+      { pl: "Dziękuję", jp: "ありがとうございます", say: "arigatoo gozaimas" },
+      { pl: "Przepraszam / halo, słucham pana", jp: "すみません", say: "sumimasen" },
+      { pl: "Tak", jp: "はい", say: "hai" },
+      { pl: "Nie", jp: "いいえ", say: "iie" },
+      { pl: "Proszę (podając coś)", jp: "どうぞ", say: "doozo" },
+      { pl: "Nie rozumiem", jp: "わかりません", say: "łakarimasen" },
+      { pl: "Czy mówi pan po angielsku?", jp: "英語を話せますか？", say: "eigo o hanasemas ka" },
+      { pl: "Proszę powoli", jp: "ゆっくりお願いします", say: "jukkuri onegai-simas" },
+      { pl: "Do widzenia", jp: "さようなら", say: "sajoonara" },
+    ],
+  },
+  {
+    group: "🍜 W restauracji",
+    items: [
+      { pl: "Dwie osoby", jp: "二人です", say: "futari des" },
+      { pl: "Poproszę to (wskazując)", jp: "これをください", say: "kore o kudasai" },
+      { pl: "Jest menu po angielsku?", jp: "英語のメニューはありますか？", say: "eigo no menjuu ła arimas ka" },
+      { pl: "Poproszę wodę", jp: "お水をください", say: "omizu o kudasai" },
+      { pl: "Bez mięsa proszę", jp: "肉なしでお願いします", say: "niku nasi de onegai-simas" },
+      { pl: "Mam alergię na jajka", jp: "卵アレルギーです", say: "tamago arerugii des" },
+      { pl: "Pyszne!", jp: "おいしいです", say: "oiszii des" },
+      { pl: "Poproszę rachunek", jp: "お会計をお願いします", say: "okaikei o onegai-simas" },
+      { pl: "Dziękuję za posiłek", jp: "ごちそうさまでした", say: "gocisoosama desita" },
+    ],
+  },
+  {
+    group: "🛍️ Zakupy i pieniądze",
+    items: [
+      { pl: "Ile to kosztuje?", jp: "いくらですか？", say: "ikura des ka" },
+      { pl: "Czy mogę zapłacić kartą?", jp: "カードで払えますか？", say: "kaado de haraemas ka" },
+      { pl: "Tylko oglądam", jp: "見ているだけです", say: "mite iru dake des" },
+      { pl: "Poproszę torebkę", jp: "袋をください", say: "fukuro o kudasai" },
+      { pl: "Poproszę paragon", jp: "レシートをください", say: "resziito o kudasai" },
+      { pl: "Czy mogę kupić bez podatku?", jp: "免税できますか？", say: "menzei dekimas ka" },
+    ],
+  },
+  {
+    group: "🚉 W drodze",
+    items: [
+      { pl: "Gdzie jest dworzec?", jp: "駅はどこですか？", say: "eki ła doko des ka" },
+      { pl: "Gdzie jest toaleta?", jp: "トイレはどこですか？", say: "toire ła doko des ka" },
+      { pl: "Czy ten pociąg jedzie do Kioto?", jp: "この電車は京都に行きますか？", say: "kono densia ła kjooto ni ikimas ka" },
+      { pl: "Z którego peronu?", jp: "何番線ですか？", say: "nanbansen des ka" },
+      { pl: "Zgubiłem się", jp: "道に迷いました", say: "mici ni majoimasita" },
+      { pl: "Proszę pod ten adres (pokazując)", jp: "この住所までお願いします", say: "kono dziuusio made onegai-simas" },
+    ],
+  },
+  {
+    group: "🚑 Gdy coś pójdzie źle",
+    items: [
+      { pl: "Pomocy!", jp: "助けて！", say: "taskete" },
+      { pl: "Źle się czuję", jp: "気分が悪いです", say: "kibun ga łarui des" },
+      { pl: "Potrzebuję lekarza", jp: "医者が必要です", say: "isia ga hicujoo des" },
+      { pl: "Gdzie jest szpital?", jp: "病院はどこですか？", say: "bjooin ła doko des ka" },
+      { pl: "Zgubiłem paszport", jp: "パスポートをなくしました", say: "paspooto o nakusimasita" },
+      { pl: "Proszę wezwać policję", jp: "警察を呼んでください", say: "keisacu o jonde kudasai" },
     ],
   },
 ];
@@ -4566,11 +4699,12 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
-  // Pakowanie to osobny panel, nie sekcja z EVENTS — dlatego jest poza "Wszystko".
+  // Pakowanie i rozmówki to osobne panele, nie sekcje z EVENTS — dlatego są poza "Wszystko".
   container.innerHTML =
     chip("all", "Wszystko") +
     LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
-    chip("packing", "🎒 Pakowanie");
+    chip("packing", "🎒 Pakowanie") +
+    chip("phrases", "🗣️ Rozmówki");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -4730,6 +4864,11 @@ function renderLogistics() {
     return;
   }
 
+  if (logisticsFilter === "phrases") {
+    renderPhrases(container);
+    return;
+  }
+
   const sections =
     logisticsFilter === "all"
       ? LOGISTICS_SECTIONS
@@ -4747,6 +4886,72 @@ function renderLogistics() {
       `;
     })
     .join("");
+}
+
+// ---------- Rozmówki ----------
+// Szukajka po polskiej stronie — w potrzebie szybciej wpisać "toaleta" niż
+// przewijać pięć grup. Trzymana w zmiennej, bo panel przerysowuje się w całości.
+let phrasesQuery = "";
+
+function renderPhrases(container) {
+  const q = normalizeText(phrasesQuery.trim());
+  const groups = PHRASES.map((g) => ({
+    group: g.group,
+    items: q ? g.items.filter((it) => normalizeText(it.pl).includes(q)) : g.items,
+  })).filter((g) => g.items.length);
+
+  container.innerHTML = `
+    <div class="phrases">
+      <input class="phrases-search" type="search" placeholder="Szukaj po polsku…"
+             value="${escapeHtml(phrasesQuery)}" />
+      <p class="phrases-hint">Stuknij zdanie, żeby pokazać je komuś na dużym ekranie.</p>
+      ${
+        groups.length
+          ? groups
+              .map(
+                (g) => `
+                  <section class="trip-section">
+                    <h2 class="trip-section-title">${escapeHtml(g.group)}<span class="trip-count">${g.items.length}</span></h2>
+                    ${g.items
+                      .map(
+                        (it) => `
+                          <button type="button" class="phrase" data-phrase="${escapeHtml(it.jp)}">
+                            <span class="phrase-pl">${escapeHtml(it.pl)}</span>
+                            <span class="phrase-jp">${escapeHtml(it.jp)}</span>
+                            <span class="phrase-say">${escapeHtml(it.say)}</span>
+                          </button>
+                        `
+                      )
+                      .join("")}
+                  </section>
+                `
+              )
+              .join("")
+          : `<p class="map-note">Nic nie pasuje do „${escapeHtml(phrasesQuery)}".</p>`
+      }
+    </div>
+  `;
+
+  const search = container.querySelector(".phrases-search");
+  // Przerysowanie zabrałoby fokus w środku pisania, więc odbudowujemy samą listę
+  // i wracamy kursorem na koniec pola — ten sam problem co przy komentarzach.
+  search.addEventListener("input", () => {
+    phrasesQuery = search.value;
+    renderPhrases(container);
+    const next = container.querySelector(".phrases-search");
+    next.focus();
+    next.setSelectionRange(next.value.length, next.value.length);
+  });
+}
+
+// Pokazanie zdania na pełnym ekranie — w hałaśliwym sklepie prościej podsunąć
+// telefon niż walczyć z wymową.
+function showPhrase(jp) {
+  openModal(`
+    <div class="modal-content phrase-big">
+      <p class="phrase-big-jp">${escapeHtml(jp)}</p>
+    </div>
+  `);
 }
 
 // ---------- Portfel ----------
@@ -5831,6 +6036,11 @@ function init() {
           list.innerHTML = `<p class="comment-empty">Brak komentarzy</p>`;
         }
       }
+      return;
+    }
+    const phrase = e.target.closest("[data-phrase]");
+    if (phrase) {
+      showPhrase(phrase.dataset.phrase);
       return;
     }
     const packDel = e.target.closest("[data-packing-del]");
