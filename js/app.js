@@ -2504,6 +2504,27 @@ function closeDetail() {
   document.body.classList.remove("modal-open");
 }
 
+// Zwraca nazwę dnia tygodnia, jeśli w wybranym dniu jest zamknięte — inaczej pusty
+// napis. Ostrzeżenie ma mówić wprost „to wtorek", bo przy dacie 2026-09-22 nikt
+// nie liczy w głowie, jaki to dzień.
+function closedOnDate(item, iso) {
+  if (!iso || !item.closedDays) return "";
+  const dow = new Date(iso + "T00:00:00").getDay();
+  if (!item.closedDays.includes(dow)) return "";
+  return WEEKDAYS_LONG[(dow + 6) % 7].toLowerCase();
+}
+
+function hoursHtml(item, iso) {
+  if (!item.hours) return "";
+  const closed = closedOnDate(item, iso);
+  return (
+    `<p class="hours">🕒 ${escapeHtml(item.hours)}</p>` +
+    (closed
+      ? `<p class="hours-warn">⚠️ Wybrany dzień to ${escapeHtml(closed)} — wtedy zamknięte.</p>`
+      : "")
+  );
+}
+
 function openDetail(item, city, category) {
   const info = ATTRACTION_DETAILS[item.id] || {};
   const author = USERS.find((u) => u.id === item.author);
@@ -2519,6 +2540,8 @@ function openDetail(item, city, category) {
       <p class="modal-eyebrow">${escapeHtml(city)} · ${escapeHtml(category)}</p>
       <h2 class="modal-title" id="modalTitle">${escapeHtml(item.name)}</h2>
       ${item.date ? `<p class="modal-date">🗓️ ${escapeHtml(item.date)}</p>` : ""}
+      ${hoursHtml(item, getUserDates()[item.id] || "")}
+      ${item.hours ? `<p class="hours-hint">Godziny orientacyjne — w święta i przy remontach bywa inaczej.</p>` : ""}
       <p class="modal-desc">${
         desc
           ? escapeHtml(desc)
@@ -2785,6 +2808,7 @@ function renderAttractions() {
             ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
           </div>
           ${dateControl}
+          <div class="hours-box">${hoursHtml(item, savedDate)}</div>
           <label class="visit-check">
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
           </label>
@@ -2815,6 +2839,8 @@ function renderAttractions() {
               return;
             }
             setUserDate(item.id, input.value);
+            // Podmieniamy sam blok godzin, a nie całą listę — karta nie może uciec spod palca.
+            card.querySelector(".hours-box").innerHTML = hoursHtml(item, input.value);
             // Skasowany dzień zabiera ze sobą godzinę — inaczej zostałaby sierota w store.
             timeInput.disabled = !input.value;
             if (!input.value) {
