@@ -889,7 +889,8 @@ function fillMiniMap(el) {
 // nieczytelny, dlatego domyślny widok trzyma się okolicy noclegu.
 const MAP_NEAR_KM = 15;
 
-const mapState = { open: false, city: null, scope: "near", lat: 0, lon: 0, z: 13 };
+// `me` trzymamy tylko w pamięci — pozycja nigdzie się nie zapisuje ani nie wysyła.
+const mapState = { open: false, city: null, scope: "near", lat: 0, lon: 0, z: 13, me: null, meMsg: "" };
 
 function mapCities() {
   const cities = getAttractionBlocks().map((b) => b.city);
@@ -940,9 +941,54 @@ function recenterMap(points, width, height) {
   const scoped =
     mapState.scope === "near" ? points.filter((p) => haversineKm(home, p) <= MAP_NEAR_KM) : points;
   const view = fitView(scoped.length ? scoped : [home], width, height);
+
+  // Po namierzeniu GPS kadr trzyma się nas, nie noclegu — inaczej mapa przy
+  // każdym przerysowaniu odskakiwałaby z powrotem do hotelu.
+  if (mapState.me) {
+    mapState.lat = mapState.me.lat;
+    mapState.lon = mapState.me.lon;
+    mapState.z = Math.max(view.z, 15);
+    return;
+  }
+
   mapState.lat = mapState.scope === "near" ? home.lat : view.lat;
   mapState.lon = mapState.scope === "near" ? home.lon : view.lon;
   mapState.z = view.z;
+}
+
+// Metry dla bliskich odległości — „0,3 km" nic nie mówi, gdy stoisz przed budynkiem.
+function formatKm(km) {
+  return km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1).replace(".", ",")} km`;
+}
+
+// Przeglądarka podaje pozycję wyłącznie po HTTPS, więc to działa pod adresem
+// Netlify, a nie po otwarciu pliku z dysku. Pozycja zostaje w pamięci karty.
+function locateMe() {
+  if (!navigator.geolocation) {
+    mapState.meMsg = "Ta przeglądarka nie umie podać pozycji.";
+    renderCityMap();
+    return;
+  }
+
+  mapState.meMsg = "Szukam pozycji…";
+  renderCityMap();
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      mapState.me = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      mapState.meMsg = "";
+      renderCityMap();
+    },
+    (err) => {
+      mapState.me = null;
+      mapState.meMsg =
+        err.code === err.PERMISSION_DENIED
+          ? "Brak zgody na pozycję — włącz ją dla tej strony w ustawieniach przeglądarki."
+          : "Nie udało się ustalić pozycji. Pod dachem i w metrze GPS często milczy.";
+      renderCityMap();
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
 }
 
 function syncMapLayer(layer, points) {
@@ -982,6 +1028,16 @@ function syncMapLayer(layer, points) {
     pin.style.top = `calc(50% + ${dy}px)`;
     layer.appendChild(pin);
   });
+
+  if (mapState.me) {
+    const xy = mercProject(mapState.me.lat, mapState.me.lon, mapState.z);
+    const dot = document.createElement("span");
+    dot.className = "map-me-dot";
+    dot.title = "Tu jesteś";
+    dot.style.left = `calc(50% + ${xy.x - c.x}px)`;
+    dot.style.top = `calc(50% + ${xy.y - c.y}px)`;
+    layer.appendChild(dot);
+  }
 }
 
 function openMapPoint(p) {
@@ -1036,6 +1092,13 @@ function renderCityMap() {
   if (!cities.includes(mapState.city)) mapState.city = filterState.city || cities[0];
   const points = mapPoints(mapState.city);
 
+  // Po namierzeniu piszemy, ile stąd do noclegu — to pierwsze pytanie wieczorem.
+  const home = mapHome(points);
+  const meNote =
+    mapState.me && home
+      ? `Tu jesteś. Do noclegu „${home.label}" jest stąd ${formatKm(haversineKm(mapState.me, home))} w linii prostej.`
+      : mapState.meMsg;
+
   host.innerHTML = `
     <div class="map-head">
       <div class="chips map-cities">
@@ -1049,6 +1112,7 @@ function renderCityMap() {
       <button class="chip map-scope" type="button">
         ${mapState.scope === "near" ? "📍 Blisko" : "🌏 Cały region"}
       </button>
+      <button class="chip map-locate${mapState.me ? " active" : ""}" type="button">🧭 Ja</button>
     </div>
     <div class="map-viewport">
       <div class="map-layer"></div>
@@ -1059,6 +1123,7 @@ function renderCityMap() {
       <span class="map-attrib">© OpenStreetMap</span>
       <div class="map-card hidden"></div>
     </div>
+    ${meNote ? `<p class="map-note">${escapeHtml(meNote)}</p>` : ""}
     ${
       points.some((p) => p.kind === "attraction")
         ? ""
@@ -1075,12 +1140,25 @@ function renderCityMap() {
     const chip = e.target.closest(".chip");
     if (!chip) return;
     mapState.city = chip.dataset.city;
+    // Pozycja z Kioto nie ma sensu na mapie Tokio — kadr utknąłby setki km obok.
+    mapState.me = null;
+    mapState.meMsg = "";
     renderCityMap();
   });
 
   host.querySelector(".map-scope").addEventListener("click", () => {
     mapState.scope = mapState.scope === "near" ? "region" : "near";
     renderCityMap();
+  });
+
+  host.querySelector(".map-locate").addEventListener("click", () => {
+    if (mapState.me) {
+      mapState.me = null;
+      mapState.meMsg = "";
+      renderCityMap();
+      return;
+    }
+    locateMe();
   });
 
   host.querySelector(".map-card").addEventListener("click", (e) => {
@@ -1667,11 +1745,12 @@ function renderLogisticsChips() {
   const chip = (type, label) =>
     `<button class="chip${logisticsFilter === type ? " active" : ""}" data-type="${type}">${label}</button>`;
 
-  // Pakowanie to osobny panel, nie sekcja z EVENTS — dlatego jest poza "Wszystko".
+  // Pakowanie i rozmówki to osobne panele, nie sekcje z EVENTS — dlatego są poza "Wszystko".
   container.innerHTML =
     chip("all", "Wszystko") +
     LOGISTICS_SECTIONS.map((s) => chip(s.type, s.chip)).join("") +
-    chip("packing", "🎒 Pakowanie");
+    chip("packing", "🎒 Pakowanie") +
+    chip("phrases", "🗣️ Rozmówki");
   container.scrollLeft = scroll;
 
   if (container.dataset.bound) return;
@@ -1831,6 +1910,11 @@ function renderLogistics() {
     return;
   }
 
+  if (logisticsFilter === "phrases") {
+    renderPhrases(container);
+    return;
+  }
+
   const sections =
     logisticsFilter === "all"
       ? LOGISTICS_SECTIONS
@@ -1848,6 +1932,72 @@ function renderLogistics() {
       `;
     })
     .join("");
+}
+
+// ---------- Rozmówki ----------
+// Szukajka po polskiej stronie — w potrzebie szybciej wpisać "toaleta" niż
+// przewijać pięć grup. Trzymana w zmiennej, bo panel przerysowuje się w całości.
+let phrasesQuery = "";
+
+function renderPhrases(container) {
+  const q = normalizeText(phrasesQuery.trim());
+  const groups = PHRASES.map((g) => ({
+    group: g.group,
+    items: q ? g.items.filter((it) => normalizeText(it.pl).includes(q)) : g.items,
+  })).filter((g) => g.items.length);
+
+  container.innerHTML = `
+    <div class="phrases">
+      <input class="phrases-search" type="search" placeholder="Szukaj po polsku…"
+             value="${escapeHtml(phrasesQuery)}" />
+      <p class="phrases-hint">Stuknij zdanie, żeby pokazać je komuś na dużym ekranie.</p>
+      ${
+        groups.length
+          ? groups
+              .map(
+                (g) => `
+                  <section class="trip-section">
+                    <h2 class="trip-section-title">${escapeHtml(g.group)}<span class="trip-count">${g.items.length}</span></h2>
+                    ${g.items
+                      .map(
+                        (it) => `
+                          <button type="button" class="phrase" data-phrase="${escapeHtml(it.jp)}">
+                            <span class="phrase-pl">${escapeHtml(it.pl)}</span>
+                            <span class="phrase-jp">${escapeHtml(it.jp)}</span>
+                            <span class="phrase-say">${escapeHtml(it.say)}</span>
+                          </button>
+                        `
+                      )
+                      .join("")}
+                  </section>
+                `
+              )
+              .join("")
+          : `<p class="map-note">Nic nie pasuje do „${escapeHtml(phrasesQuery)}".</p>`
+      }
+    </div>
+  `;
+
+  const search = container.querySelector(".phrases-search");
+  // Przerysowanie zabrałoby fokus w środku pisania, więc odbudowujemy samą listę
+  // i wracamy kursorem na koniec pola — ten sam problem co przy komentarzach.
+  search.addEventListener("input", () => {
+    phrasesQuery = search.value;
+    renderPhrases(container);
+    const next = container.querySelector(".phrases-search");
+    next.focus();
+    next.setSelectionRange(next.value.length, next.value.length);
+  });
+}
+
+// Pokazanie zdania na pełnym ekranie — w hałaśliwym sklepie prościej podsunąć
+// telefon niż walczyć z wymową.
+function showPhrase(jp) {
+  openModal(`
+    <div class="modal-content phrase-big">
+      <p class="phrase-big-jp">${escapeHtml(jp)}</p>
+    </div>
+  `);
 }
 
 // ---------- Portfel ----------
@@ -2354,6 +2504,27 @@ function closeDetail() {
   document.body.classList.remove("modal-open");
 }
 
+// Zwraca nazwę dnia tygodnia, jeśli w wybranym dniu jest zamknięte — inaczej pusty
+// napis. Ostrzeżenie ma mówić wprost „to wtorek", bo przy dacie 2026-09-22 nikt
+// nie liczy w głowie, jaki to dzień.
+function closedOnDate(item, iso) {
+  if (!iso || !item.closedDays) return "";
+  const dow = new Date(iso + "T00:00:00").getDay();
+  if (!item.closedDays.includes(dow)) return "";
+  return WEEKDAYS_LONG[(dow + 6) % 7].toLowerCase();
+}
+
+function hoursHtml(item, iso) {
+  if (!item.hours) return "";
+  const closed = closedOnDate(item, iso);
+  return (
+    `<p class="hours">🕒 ${escapeHtml(item.hours)}</p>` +
+    (closed
+      ? `<p class="hours-warn">⚠️ Wybrany dzień to ${escapeHtml(closed)} — wtedy zamknięte.</p>`
+      : "")
+  );
+}
+
 function openDetail(item, city, category) {
   const info = ATTRACTION_DETAILS[item.id] || {};
   const author = USERS.find((u) => u.id === item.author);
@@ -2369,6 +2540,8 @@ function openDetail(item, city, category) {
       <p class="modal-eyebrow">${escapeHtml(city)} · ${escapeHtml(category)}</p>
       <h2 class="modal-title" id="modalTitle">${escapeHtml(item.name)}</h2>
       ${item.date ? `<p class="modal-date">🗓️ ${escapeHtml(item.date)}</p>` : ""}
+      ${hoursHtml(item, getUserDates()[item.id] || "")}
+      ${item.hours ? `<p class="hours-hint">Godziny orientacyjne — w święta i przy remontach bywa inaczej.</p>` : ""}
       <p class="modal-desc">${
         desc
           ? escapeHtml(desc)
@@ -2635,6 +2808,7 @@ function renderAttractions() {
             ${item.mapQuery ? `<a href="${mapsUrl(item.mapQuery)}" target="_blank" rel="noopener">📍 mapa</a>` : ""}
           </div>
           ${dateControl}
+          <div class="hours-box">${hoursHtml(item, savedDate)}</div>
           <label class="visit-check">
             <input type="checkbox" ${isVisited ? "checked" : ""} /> Zwiedzone
           </label>
@@ -2665,6 +2839,8 @@ function renderAttractions() {
               return;
             }
             setUserDate(item.id, input.value);
+            // Podmieniamy sam blok godzin, a nie całą listę — karta nie może uciec spod palca.
+            card.querySelector(".hours-box").innerHTML = hoursHtml(item, input.value);
             // Skasowany dzień zabiera ze sobą godzinę — inaczej zostałaby sierota w store.
             timeInput.disabled = !input.value;
             if (!input.value) {
@@ -2932,6 +3108,11 @@ function init() {
           list.innerHTML = `<p class="comment-empty">Brak komentarzy</p>`;
         }
       }
+      return;
+    }
+    const phrase = e.target.closest("[data-phrase]");
+    if (phrase) {
+      showPhrase(phrase.dataset.phrase);
       return;
     }
     const packDel = e.target.closest("[data-packing-del]");

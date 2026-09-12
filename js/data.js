@@ -532,6 +532,9 @@ const ATTRACTION_DETAILS = {
 // date      — data USTALONA WCZEŚNIEJ (z planu) — jeśli jest, użytkownik jej NIE zmienia
 // mapQuery  — fraza do wyszukania lokalizacji w Google Maps
 // photo     — ścieżka do lokalnego zdjęcia (assets/attractions/<id>.jpg)
+// Pole `hours` wypełnione tylko tam, gdzie godziny są ustalone od lat — reszta
+// atrakcji go nie ma i apka wtedy nic nie obiecuje. `closedDays` to dni tygodnia
+// w numeracji JavaScriptu (0 = niedziela), używane do ostrzeżenia przy wyborze daty.
 const ATTRACTIONS = [
   {
     city: "Kioto",
@@ -565,6 +568,7 @@ const ATTRACTIONS = [
             lat: 35.005,
             lon: 135.7656,
             name: "Nishiki Market",
+            hours: "10:00–18:00, część stoisk zamknięta w środy",
             mapQuery: "Nishiki Market, Kyoto",
             photo: "assets/attractions/kioto-nishiki-market.jpg",
             author: "bartek",
@@ -579,6 +583,7 @@ const ATTRACTIONS = [
             lat: 34.6829,
             lon: 135.8546,
             name: "Nara — jelenie",
+            hours: "park czynny całą dobę",
             suggestedDate: "2026-09-16",
             mapQuery: "Nara Park, Nara",
             photo: "assets/attractions/kioto-nara-deer.jpg",
@@ -598,6 +603,7 @@ const ATTRACTIONS = [
             lat: 34.9943,
             lon: 135.7844,
             name: "Kiyomizu-dera, Ninenzaka i Sannenzaka",
+            hours: "06:00–18:00, otwarte codziennie",
             mapQuery: "Kiyomizu-dera, Kyoto",
             photo: "assets/attractions/kioto-kiyomizu-dera.jpg",
             author: "bartek",
@@ -607,6 +613,7 @@ const ATTRACTIONS = [
             lat: 34.9675,
             lon: 135.7797,
             name: "Fushimi Inari Taisha",
+            hours: "teren czynny całą dobę, kasy i sklepiki krócej",
             suggestedDate: "2026-09-15",
             mapQuery: "Fushimi Inari Taisha, Kyoto",
             photo: "assets/attractions/kioto-fushimi-inari.jpg",
@@ -627,6 +634,7 @@ const ATTRACTIONS = [
             lat: 35.0167,
             lon: 135.6711,
             name: "Las bambusowy Arashiyama (Sagano Bamboo Forest)",
+            hours: "gaj czynny całą dobę, bez biletów",
             date: "15 września",
             note: "być na 8:00, bez rezerwacji",
             mapQuery: "Arashiyama Bamboo Grove, Kyoto",
@@ -648,6 +656,7 @@ const ATTRACTIONS = [
             lat: 34.9811,
             lon: 135.7475,
             name: "To-ji",
+            hours: "teren 05:00–17:00, pawilony 08:00–17:00",
             suggestedDate: "2026-09-14",
             note: "ok. 12 min pieszo na południe od hotelu",
             mapQuery: "To-ji Temple, Kyoto",
@@ -659,6 +668,7 @@ const ATTRACTIONS = [
             lat: 35.0036,
             lon: 135.7785,
             name: "Yasaka-jinja",
+            hours: "teren czynny całą dobę, wstęp wolny",
             note: "w dzielnicy Gion",
             mapQuery: "Yasaka Shrine, Kyoto",
             photo: "assets/attractions/kioto-yasaka.jpg",
@@ -692,6 +702,7 @@ const ATTRACTIONS = [
             lat: 34.9876,
             lon: 135.7592,
             name: "Kyoto Tower — punkt widokowy",
+            hours: "10:00–21:00, ostatnie wejście 20:30",
             note: "niedaleko hotelu, najlepiej na zachód słońca",
             mapQuery: "Kyoto Tower",
             photo: "assets/attractions/kioto-tower.jpg",
@@ -702,6 +713,7 @@ const ATTRACTIONS = [
             lat: 35.0254,
             lon: 135.7622,
             name: "Kyoto Gyoen — ogród cesarski",
+            hours: "park całą dobę; Pałac Cesarski 09:00–16:00, w poniedziałki zamknięty",
             note: "ok. 30 min od hotelu",
             mapQuery: "Kyoto Gyoen National Garden",
             photo: "assets/attractions/kioto-gyoen.jpg",
@@ -789,6 +801,7 @@ const ATTRACTIONS = [
             lat: 35.658,
             lon: 139.7016,
             name: "Shibuya Sky",
+            hours: "10:00–22:30, bilet z godziną wejścia",
             mapQuery: "Shibuya Sky, Tokyo",
             photo: "assets/attractions/tokyo-shibuya-sky.jpg",
             author: "paula",
@@ -817,6 +830,9 @@ const ATTRACTIONS = [
             lat: 35.6962,
             lon: 139.5706,
             name: "Muzeum Ghibli",
+            hours: "10:00–18:00, wejście o godzinie z biletu",
+            // Wtorek to dzień zamknięcia muzeum — kupiony bilet wypada w poniedziałek.
+            closedDays: [2],
             date: "21 września, 12:00",
             note: "✅ kupione",
             mapQuery: "Ghibli Museum, Mitaka",
@@ -828,6 +844,7 @@ const ATTRACTIONS = [
             lat: 35.6619,
             lon: 139.7011,
             name: "Tower Records Shibuya",
+            hours: "11:00–22:00, otwarte codziennie",
             date: "1 października",
             mapQuery: "Tower Records Shibuya, Tokyo",
             photo: "assets/attractions/tokyo2-tower-records.jpg",
@@ -843,6 +860,7 @@ const ATTRACTIONS = [
             lat: 35.6823,
             lon: 139.7685,
             name: "Dragon Ball Store — Tokyo Station, Character Street",
+            hours: "09:30–20:30, otwarte codziennie",
             mapQuery: "Tokyo Character Street, Tokyo Station",
             photo: "assets/attractions/tokyo2-dragon-ball-store.jpg",
             author: "bartek",
@@ -884,6 +902,8 @@ const ATTRACTIONS = [
             lat: 35.6868,
             lon: 139.7884,
             name: "Trening sumo (Arashio Stable)",
+            hours: "06:00–09:00, tylko w dni robocze i poza turniejami",
+            closedDays: [0, 6],
             note: "za darmo, 6:00–9:00 w dni robocze",
             mapQuery: "Arashio Stable, Tokyo",
             photo: "assets/attractions/tokyo-opt-sumo-training.jpg",
@@ -964,6 +984,75 @@ const PACKING = [
       { id: "towel", label: "Ręcznik do rąk", note: "w toaletach zwykle nie ma suszarek" },
       { id: "trashbag", label: "Woreczek na śmieci", note: "koszy na ulicach prawie nie ma" },
       { id: "backup", label: "Kopia danych aplikacji na obu telefonach" },
+    ],
+  },
+];
+
+// Rozmówki. `say` to wymowa zapisana po polsku, a nie transkrypcja naukowa —
+// czytane wprost brzmi wystarczająco blisko, żeby zostać zrozumianym. Japońskie
+// "u" na końcu -masu prawie zanika, stąd "-mas". Sylabę zapisujemy tak, jak się
+// ją mówi: し = "si", ち = "ci", わ jako partykuła = "ła".
+const PHRASES = [
+  {
+    group: "🙂 Podstawy",
+    items: [
+      { pl: "Dzień dobry", jp: "こんにちは", say: "kon-ni-ci-ła" },
+      { pl: "Dziękuję", jp: "ありがとうございます", say: "arigatoo gozaimas" },
+      { pl: "Przepraszam / halo, słucham pana", jp: "すみません", say: "sumimasen" },
+      { pl: "Tak", jp: "はい", say: "hai" },
+      { pl: "Nie", jp: "いいえ", say: "iie" },
+      { pl: "Proszę (podając coś)", jp: "どうぞ", say: "doozo" },
+      { pl: "Nie rozumiem", jp: "わかりません", say: "łakarimasen" },
+      { pl: "Czy mówi pan po angielsku?", jp: "英語を話せますか？", say: "eigo o hanasemas ka" },
+      { pl: "Proszę powoli", jp: "ゆっくりお願いします", say: "jukkuri onegai-simas" },
+      { pl: "Do widzenia", jp: "さようなら", say: "sajoonara" },
+    ],
+  },
+  {
+    group: "🍜 W restauracji",
+    items: [
+      { pl: "Dwie osoby", jp: "二人です", say: "futari des" },
+      { pl: "Poproszę to (wskazując)", jp: "これをください", say: "kore o kudasai" },
+      { pl: "Jest menu po angielsku?", jp: "英語のメニューはありますか？", say: "eigo no menjuu ła arimas ka" },
+      { pl: "Poproszę wodę", jp: "お水をください", say: "omizu o kudasai" },
+      { pl: "Bez mięsa proszę", jp: "肉なしでお願いします", say: "niku nasi de onegai-simas" },
+      { pl: "Mam alergię na jajka", jp: "卵アレルギーです", say: "tamago arerugii des" },
+      { pl: "Pyszne!", jp: "おいしいです", say: "oiszii des" },
+      { pl: "Poproszę rachunek", jp: "お会計をお願いします", say: "okaikei o onegai-simas" },
+      { pl: "Dziękuję za posiłek", jp: "ごちそうさまでした", say: "gocisoosama desita" },
+    ],
+  },
+  {
+    group: "🛍️ Zakupy i pieniądze",
+    items: [
+      { pl: "Ile to kosztuje?", jp: "いくらですか？", say: "ikura des ka" },
+      { pl: "Czy mogę zapłacić kartą?", jp: "カードで払えますか？", say: "kaado de haraemas ka" },
+      { pl: "Tylko oglądam", jp: "見ているだけです", say: "mite iru dake des" },
+      { pl: "Poproszę torebkę", jp: "袋をください", say: "fukuro o kudasai" },
+      { pl: "Poproszę paragon", jp: "レシートをください", say: "resziito o kudasai" },
+      { pl: "Czy mogę kupić bez podatku?", jp: "免税できますか？", say: "menzei dekimas ka" },
+    ],
+  },
+  {
+    group: "🚉 W drodze",
+    items: [
+      { pl: "Gdzie jest dworzec?", jp: "駅はどこですか？", say: "eki ła doko des ka" },
+      { pl: "Gdzie jest toaleta?", jp: "トイレはどこですか？", say: "toire ła doko des ka" },
+      { pl: "Czy ten pociąg jedzie do Kioto?", jp: "この電車は京都に行きますか？", say: "kono densia ła kjooto ni ikimas ka" },
+      { pl: "Z którego peronu?", jp: "何番線ですか？", say: "nanbansen des ka" },
+      { pl: "Zgubiłem się", jp: "道に迷いました", say: "mici ni majoimasita" },
+      { pl: "Proszę pod ten adres (pokazując)", jp: "この住所までお願いします", say: "kono dziuusio made onegai-simas" },
+    ],
+  },
+  {
+    group: "🚑 Gdy coś pójdzie źle",
+    items: [
+      { pl: "Pomocy!", jp: "助けて！", say: "taskete" },
+      { pl: "Źle się czuję", jp: "気分が悪いです", say: "kibun ga łarui des" },
+      { pl: "Potrzebuję lekarza", jp: "医者が必要です", say: "isia ga hicujoo des" },
+      { pl: "Gdzie jest szpital?", jp: "病院はどこですか？", say: "bjooin ła doko des ka" },
+      { pl: "Zgubiłem paszport", jp: "パスポートをなくしました", say: "paspooto o nakusimasita" },
+      { pl: "Proszę wezwać policję", jp: "警察を呼んでください", say: "keisacu o jonde kudasai" },
     ],
   },
 ];

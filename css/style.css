@@ -493,6 +493,30 @@ body {
   gap: 6px 10px;
 }
 
+/* Godziny czyta się przelotnie, więc są szare i drobne. Ostrzeżenie o zamknięciu
+   musi natomiast zatrzymać wzrok — stąd czerwone tło na całą szerokość. */
+.hours {
+  margin: 8px 0 0;
+  color: #7a6a72;
+  font-size: 0.82rem;
+}
+
+.hours-warn {
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #fdecec;
+  color: #b3261e;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.hours-hint {
+  margin: 4px 0 0;
+  color: #9a8a92;
+  font-size: 0.75rem;
+}
+
 .attraction-card .date-picker,
 .attraction-card .time-picker {
   display: flex;
@@ -1563,7 +1587,22 @@ body.modal-open { overflow: hidden; }
 
 .map-cities { flex: 1; min-width: 0; }
 
-.map-scope { flex: none; }
+.map-scope,
+.map-locate { flex: none; }
+
+/* Zielona kropka z pulsującą obwódką — hotel jest niebieski, atrakcje różowe,
+   więc własna pozycja musi mieć trzeci kolor, żeby nie zlewała się z pinezkami. */
+.map-me-dot {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border-radius: 50%;
+  background: #2e9e6b;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 4px rgba(46, 158, 107, 0.3), 0 1px 5px rgba(0, 0, 0, 0.4);
+  z-index: 3;
+}
 
 .map-viewport {
   position: relative;
@@ -1707,6 +1746,70 @@ body.modal-open { overflow: hidden; }
   border-color: var(--pink-dark);
   box-shadow: 0 0 0 3px rgba(214, 122, 160, 0.35);
   z-index: 2;
+}
+
+/* ---------- ROZMÓWKI ---------- */
+/* 16 px, bo poniżej iOS Safari przybliża stronę przy wejściu w pole. */
+.phrases-search {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 16px;
+  background: #fff;
+}
+
+.phrases-hint {
+  margin: 6px 2px 12px;
+  font-size: 0.75rem;
+  color: #a89898;
+}
+
+.phrase {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.phrase-pl {
+  display: block;
+  font-size: 0.8rem;
+  color: #a89898;
+}
+
+/* Japoński duży, bo to on idzie pod nos rozmówcy. */
+.phrase-jp {
+  display: block;
+  margin: 2px 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #5a4a4a;
+}
+
+.phrase-say {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--pink-dark);
+}
+
+/* Na pełnym ekranie zdanie ma być czytelne z wyciągniętej ręki. */
+.phrase-big { padding: 32px 20px; }
+
+.phrase-big-jp {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- TELEFON ---------- */
